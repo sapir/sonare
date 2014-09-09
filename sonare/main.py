@@ -332,6 +332,11 @@ class BlockItem(QGraphicsWebView):
         .addr               { color: #B0E89E; }
         .hex                { color: #EEBA6B; }
         .asm                { color: #B5D3DD; }
+
+        div.label:hover     { background: #404054; }
+        tr:hover            { background: #404054;
+                              border-top: 1px solid #222240;
+                              border-bottom: 1px solid #222240; }
         '''
 
 
