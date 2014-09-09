@@ -329,7 +329,7 @@ class BlockItem(QGraphicsWebView):
         td                  { white-space: nowrap; }
         td:not(:last-child) { padding-right: 15px; }
 
-        .addr               { color: #B0E89E; }
+        .addr               { color: #B5D3DD; }
         .hex                { color: #EEBA6B; }
         .asm                { color: #B5D3DD; }
 
