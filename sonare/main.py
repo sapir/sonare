@@ -5,6 +5,7 @@ import networkx
 from xml.sax.saxutils import escape as xmlEscape
 from PySide.QtCore import *
 from PySide.QtGui import *
+from PySide.QtWebKit import *
 from r2.r_core import RCore
 
 
@@ -306,42 +307,46 @@ class MyBlock(object):
         return normalizeAddr(self.endOp.fail)
 
 
-class BlockItem(QGraphicsRectItem):
-    BLOCK_BG = QColor(80, 80, 100)
-
-    HORIZ_MARGIN = 10
-    VERT_MARGIN = 7
+# TODO: this is rather silly. the entire scene could be a web widget
+class BlockItem(QGraphicsWebView):
+    FONT_NAME = 'Monospace'
+    FONT_SIZE = 8
 
     STYLE = '''
-        html { font-family: Monospace; font-size: 8pt; }
+        body                { border: 2px solid #222240; background: #505064;
+                              margin: 0; padding: 10px 15px; }
 
-        div.label       {   color: #ECECEC;
-                            margin-left: -2px;
-                        }
+        body, table         { font-family: 'Monospace'; font-size: 8pt;
+                              font-weight: medium; }
 
-        td.addr, td.hex  { padding-right: 10px; }
+        div.label           { margin-left: -2px; color: #ECECEC; }
 
-        .addr { color: #B0E89E; }
-        .hex  { color: #EEBA6B; }
-        .asm  { color: #B5D3DD; }
+
+        table               { border-collapse: collapse; border-spacing: 0px; }
+        table, tr, td       { margin: 0; padding: 0; }
+        /* sometimes size calculation result is a little too small. avoid
+            wrapping in that case. */
+        td                  { white-space: nowrap; }
+        td:not(:last-child) { padding-right: 15px; }
+
+        .addr               { color: #B0E89E; }
+        .hex                { color: #EEBA6B; }
+        .asm                { color: #B5D3DD; }
         '''
-
-    MINIMUM_BLOCK_WIDTH = 200
 
 
     def __init__(self, r2core, myblock):
-        QGraphicsRectItem.__init__(self)
-        self.setBrush(self.BLOCK_BG)
+        QGraphicsWebView.__init__(self)
 
         self.r2core = r2core
         self.myblock = myblock
 
-        self.textItem = QGraphicsTextItem(self)
-        doc = self.textItem.document()
-        doc.defaultTextOption().setWrapMode(QTextOption.NoWrap)
-        self._updateText()
+        self.fontMetrics = QFontMetricsF(
+            QFont(self.FONT_NAME, self.FONT_SIZE))
 
-        self._updateRect()
+        self.setResizesToContents(True)
+
+        self._updateText()
 
         self.outgoingEdgeItems = []
         self.incomingEdgeItems = []
@@ -381,17 +386,6 @@ class BlockItem(QGraphicsRectItem):
         self.incomingEdgeItems.append(edgeItem)
         self.resortEdgeItems()
 
-    def _updateRect(self):
-        textRect = self.textItem.boundingRect()
-        textRect.setTopLeft(QPoint(0, 0))
-        textRect.setWidth(
-            max(textRect.width(), self.MINIMUM_BLOCK_WIDTH)
-                + 2 * self.HORIZ_MARGIN)
-        textRect.setHeight(textRect.height() + 2 * self.VERT_MARGIN)
-        self.setRect(textRect)
-
-        self.textItem.setPos(self.HORIZ_MARGIN, self.VERT_MARGIN)
-
     def _getAsmOps(self):
         for op in self.myblock.ops:
             addr = op.addr
@@ -418,6 +412,10 @@ class BlockItem(QGraphicsRectItem):
         assert len(hexstring) % 2 == 0
         return ' '.join(hexstring[i:i+2] for i in xrange(0, len(hexstring), 2))
 
+    @staticmethod
+    def formatAsm(op):
+        return op.get_asm()
+
     def _updateText(self):
         addrsAndOps = list(self._getAsmOps())
 
@@ -431,19 +429,46 @@ class BlockItem(QGraphicsRectItem):
             '''.format(
                 addr=xmlEscape(self.formatAddr(addr)),
                 hex=xmlEscape(self.formatHex(op.get_hex())),
-                asm=xmlEscape(op.get_asm()))
+                asm=xmlEscape(self.formatAsm(op)))
             for (addr, op) in addrsAndOps)
+
+        maxLineWidth = max(
+            [
+                self.fontMetrics.boundingRect(
+                    self.formatAddr(addr)
+                    + self.formatHex(op.get_hex())
+                    + self.formatAsm(op)
+                ).width()
+                + 15 * 2        # padding in pixels between columns
+                for (addr, op) in addrsAndOps
+            ] + [
+                self.fontMetrics.width(self.labelName + ':')
+            ])
+        width = (maxLineWidth
+            + 15 * 2        # padding in pixels on each side
+            + 4             # 2px border on each side
+            )
+
+        # there are (len(addrsAndOps) + 1) lines, including the label
+        height = self.fontMetrics.lineSpacing() * len(addrsAndOps)
+
+        self.page().setPreferredContentsSize(QSize(width, height))
 
         html = '''
             <html>
+            <head>
+                <style>{}</style>
+            </head>
+            <body>
+            <div class="block">
                 <div class="label">{}:</div>
                 <table>{}</table>
+            </div>
+            </body>
             </html>
-            '''.format(self.labelName, ''.join(tableRows))
+            '''.format(self.STYLE, self.labelName, ''.join(tableRows))
 
-        doc = self.textItem.document()
-        doc.setDefaultStyleSheet(self.STYLE)
-        doc.setHtml(html)
+        self.setHtml(html)
 
 
 class SonareScene(QGraphicsScene):
