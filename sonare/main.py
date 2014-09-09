@@ -3,6 +3,7 @@ import sys
 import os
 import networkx
 from xml.sax.saxutils import escape as xmlEscape
+from HTMLParser import HTMLParser
 from PySide.QtCore import *
 from PySide.QtGui import *
 from PySide.QtWebKit import *
@@ -61,6 +62,23 @@ def isEmptyIterable(iterable):
         return False
 
     return True
+
+
+class MLStripper(HTMLParser):
+    '''http://stackoverflow.com/questions/753052'''
+    def __init__(self):
+        self.reset()
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
+
+def stripHtmlTags(html):
+    """strip HTML tags from a string (not secure)"""
+    s = MLStripper()
+    s.feed(html)
+    return s.get_data()
 
 
 class EdgeItem(QGraphicsPathItem):
@@ -407,19 +425,23 @@ class BlockItem(QGraphicsWebView):
 
     @staticmethod
     def formatAddr(addr):
-        '''Format address nicely'''
+        '''Format address nicely as HTML'''
         addrHex = format(addr, '08x')
-        return '{}:{}'.format(addrHex[:4], addrHex[4:])
+        return xmlEscape('{}:{}'.format(addrHex[:4], addrHex[4:]))
 
     @staticmethod
     def formatHex(hexstring):
-        '''Add spaces between hex chars'''
+        '''Add spaces between hex chars, format nicely as HTML'''
         assert len(hexstring) % 2 == 0
-        return ' '.join(hexstring[i:i+2] for i in xrange(0, len(hexstring), 2))
+        hexWithSpaces = ' '.join(
+            hexstring[i:i+2]
+            for i in xrange(0, len(hexstring), 2))
+        return xmlEscape(hexWithSpaces)
 
     @staticmethod
     def formatAsm(op):
-        return op.get_asm()
+        '''Format op's assembly nicely as HTML'''
+        return xmlEscape(op.get_asm())
 
     def _updateText(self):
         addrsAndOps = list(self._getAsmOps())
@@ -432,18 +454,18 @@ class BlockItem(QGraphicsWebView):
                 <td class="asm">{asm}</td>
                 </tr>
             '''.format(
-                addr=xmlEscape(self.formatAddr(addr)),
-                hex=xmlEscape(self.formatHex(op.get_hex())),
-                asm=xmlEscape(self.formatAsm(op)))
+                addr=self.formatAddr(addr),
+                hex=self.formatHex(op.get_hex()),
+                asm=self.formatAsm(op))
             for (addr, op) in addrsAndOps)
 
         maxLineWidth = max(
             [
-                self.fontMetrics.boundingRect(
+                self.fontMetrics.boundingRect(stripHtmlTags(
                     self.formatAddr(addr)
                     + self.formatHex(op.get_hex())
                     + self.formatAsm(op)
-                ).width()
+                )).width()
                 + 15 * 2        # padding in pixels between columns
                 for (addr, op) in addrsAndOps
             ] + [
