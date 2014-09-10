@@ -479,9 +479,7 @@ class SonareScene(QGraphicsScene):
 
         self.funcName = funcName
         self.func = self._getFunc(self.funcName)
-        if self.func is None:
-            self.func = self.r2core.anal.get_fcns()[0]
-            self.funcName = self.func.name
+
         self._makeBlockItems()
         self._makeBlockGraph()
         self._makeEdgeItemsFromGraph()
@@ -493,11 +491,13 @@ class SonareScene(QGraphicsScene):
         self.r2core.bin_load("", 0)
 
         self.r2core.anal_all()
+        print() # anal_all is noisy
+
+        # clean up function overlaps
+        self.r2core.cmd_str('aff')
 
     def _getFunc(self, funcName):
         funcAddr = self.r2core.num.get(funcName)
-        print(funcName, hex(funcAddr))
-        print(self.r2core.anal.get_fcn_at(funcAddr))
         return self.r2core.anal.get_fcn_at(funcAddr)
 
     def _getFuncOpAddrs(self, funcAddr):
@@ -706,6 +706,6 @@ if __name__ == '__main__':
         raise SystemExit("Usage: {0} <binary file> <function name>".format(args[0]))
 
     path, funcName = args[1:]
-    window = SonareWindow(path, b'sym.' + funcName.encode('ascii'))
+    window = SonareWindow(path, funcName.encode('ascii'))
     window.showMaximized()
     app.exec_()
