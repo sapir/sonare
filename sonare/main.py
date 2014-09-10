@@ -2,12 +2,15 @@ from __future__ import print_function
 import sys
 import os
 import networkx
+from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
 from HTMLParser import HTMLParser
+from mako.template import Template
 from PySide.QtCore import *
 from PySide.QtGui import *
 from PySide.QtWebKit import *
 from r2.r_core import RCore
+from x86asm import X86AsmFormatter
 
 
 BAD_ADDR = 0xffffffffffffffff
@@ -330,38 +333,12 @@ class BlockItem(QGraphicsWebView):
     FONT_NAME = 'Monospace'
     FONT_SIZE = 8
 
-    STYLE = '''
-        body                { border: 2px solid #222240; background: #505064;
-                              margin: 0; padding: 10px 15px; }
 
-        body, table         { font-family: 'Monospace'; font-size: 8pt;
-                              font-weight: medium; }
-
-        div.label           { margin-left: -2px; color: #ECECEC; }
-
-
-        table               { border-collapse: collapse; border-spacing: 0px; }
-        table, tr, td       { margin: 0; padding: 0; }
-        /* sometimes size calculation result is a little too small. avoid
-            wrapping in that case. */
-        td                  { white-space: nowrap; }
-        td:not(:last-child) { padding-right: 15px; }
-
-        .addr               { color: #B5D3DD; }
-        .hex                { color: #EEBA6B; }
-        .asm                { color: #B5D3DD; }
-
-        div.label:hover     { background: #404054; }
-        tr:hover            { background: #404054;
-                              border-top: 1px solid #222240;
-                              border-bottom: 1px solid #222240; }
-        '''
-
-
-    def __init__(self, r2core, myblock):
+    def __init__(self, r2core, asmFormatter, myblock):
         QGraphicsWebView.__init__(self)
 
         self.r2core = r2core
+        self.asmFormatter = asmFormatter
         self.myblock = myblock
 
         self.fontMetrics = QFontMetricsF(
@@ -438,36 +415,25 @@ class BlockItem(QGraphicsWebView):
             for i in xrange(0, len(hexstring), 2))
         return xmlEscape(hexWithSpaces)
 
-    @staticmethod
-    def formatAsm(op):
+    def formatAsm(self, addr, op):
         '''Format op's assembly nicely as HTML'''
-        return xmlEscape(op.get_asm())
+        return self.asmFormatter.format(unhexlify(op.get_hex()), addr)
 
     def _updateText(self):
         addrsAndOps = list(self._getAsmOps())
 
-        tableRows = (
-            '''
-                <tr>
-                <td class="addr">{addr}</td>
-                <td class="hex">{hex}</td>
-                <td class="asm">{asm}</td>
-                </tr>
-            '''.format(
-                addr=self.formatAddr(addr),
-                hex=self.formatHex(op.get_hex()),
-                asm=self.formatAsm(op))
-            for (addr, op) in addrsAndOps)
+        formattedInsns = [
+            (self.formatAddr(addr), self.formatHex(op.get_hex()),
+                self.formatAsm(addr, op))
+            for (addr, op) in addrsAndOps]
 
         maxLineWidth = max(
             [
                 self.fontMetrics.boundingRect(stripHtmlTags(
-                    self.formatAddr(addr)
-                    + self.formatHex(op.get_hex())
-                    + self.formatAsm(op)
+                    fmtAddr + fmtHex + fmtAsm
                 )).width()
                 + 15 * 2        # padding in pixels between columns
-                for (addr, op) in addrsAndOps
+                for (fmtAddr, fmtHex, fmtAsm) in formattedInsns
             ] + [
                 self.fontMetrics.width(self.labelName + ':')
             ])
@@ -481,21 +447,9 @@ class BlockItem(QGraphicsWebView):
 
         self.page().setPreferredContentsSize(QSize(width, height))
 
-        html = '''
-            <html>
-            <head>
-                <style>{}</style>
-            </head>
-            <body>
-            <div class="block">
-                <div class="label">{}:</div>
-                <table>{}</table>
-            </div>
-            </body>
-            </html>
-            '''.format(self.STYLE, self.labelName, ''.join(tableRows))
-
-        self.setHtml(html)
+        tmpl = Template(filename='sonare/block.html')
+        self.setHtml(tmpl.render(
+            labelName=self.labelName, formattedInsns=formattedInsns))
 
 
 class SonareScene(QGraphicsScene):
@@ -514,7 +468,15 @@ class SonareScene(QGraphicsScene):
 
     def _open(self, path, funcName):
         self.clear()
+
         self._setupCore(path)
+
+        arch = self.r2core.config.get('asm.arch')
+        if arch == 'x86':
+            self.asmFormatter = X86AsmFormatter()
+        else:
+            raise NotImplementedError("asm formatting for {}".format(arch))
+
         self.funcName = funcName
         self.func = self._getFunc(self.funcName)
         if self.func is None:
@@ -610,7 +572,7 @@ class SonareScene(QGraphicsScene):
     def _makeBlockItems(self):
         # r2blocks = self.func.get_bbs()
         # self.blockItems = [BlockItem(self.r2core, r2b) for r2b in r2blocks]
-        self.blockItems = [BlockItem(self.r2core, mb)
+        self.blockItems = [BlockItem(self.r2core, self.asmFormatter, mb)
             for mb in self._genMyBlocks()]
 
         for b in self.blockItems:

@@ -1,0 +1,50 @@
+<html>
+<head>
+    <style>
+        body                { border: 2px solid #222240; background: #505064;
+                              margin: 0; padding: 10px 15px; }
+
+        body, table         { font-family: 'Monospace'; font-size: 8pt;
+                              font-weight: medium; }
+
+        div.label           { margin-left: -2px; }
+
+
+        table               { border-collapse: collapse; border-spacing: 0px; }
+        table, tr, td       { margin: 0; padding: 0; }
+        /* sometimes size calculation result is a little too small. avoid
+            wrapping in that case. */
+        td                  { white-space: nowrap; }
+        td:not(:last-child) { padding-right: 15px; }
+
+        /*.addr               { color: #B673E5; }*/
+        .hex                { color: #EEBA6B; }
+        .ptr_size           { color: #B5D3DD; font-style: italic; }
+        .addr, .num                { color: #7FEC91; }
+
+        .label              { color: #D8D8D8; font-weight: bold; }
+        .hex, .op           { color: #D8D8D8; }
+        .mnem               { color: #ECDE17; }
+        .reg                { color: #E96976; }
+
+        div.label:hover     { background: #404054; }
+        tr:hover            { background: #404054;
+                              border-top: 1px solid #222240;
+                              border-bottom: 1px solid #222240; }
+    </style>
+</head>
+<body>
+<div class="block">
+    <div class="label">${labelName}:</div>
+    <table>
+        % for (addr, hex, asm) in formattedInsns:
+        <tr>
+        <td class="addr">${addr}</td>
+        <td class="hex">${hex}</td>
+        <td class="asm">${asm}</td>
+        </tr>
+        % endfor
+    </table>
+</div>
+</body>
+</html>
