@@ -9,6 +9,9 @@ from r2.r_core import RCore
 from graph import SonareGraphScene
 
 
+BASE_ADDR = 0x08048000
+
+
 class FlagListModel(QStandardItemModel):
     def __init__(self, r2core):
         QStandardItemModel.__init__(self)
@@ -88,7 +91,7 @@ class SonareWindow(QMainWindow):
         self.r2core = RCore()
         self.r2core.flags.space_set(b'symbols')
 
-        self.r2core.file_open(path.encode('ascii'), False, 0)
+        self.r2core.file_open(path.encode('ascii'), False, BASE_ADDR)
         self.r2core.bin_load("", 0)
 
         self.r2core.anal_all()
