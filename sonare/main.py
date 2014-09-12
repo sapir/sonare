@@ -515,15 +515,13 @@ class SonareScene(QGraphicsScene):
     def clear(self):
         QGraphicsScene.clear(self)
 
-        self.func = self.blockItems = self.blockItemsByAddr = \
+        self.funcAddr = self.blockItems = self.blockItemsByAddr = \
             self.blockGraph = self.edgeItems = None
 
-    def loadFunc(self, func):
-        assert func is not None
-
+    def loadFunc(self, funcAddr):
         self.clear()
 
-        self.func = func
+        self.funcAddr = funcAddr
 
         self._makeBlockItems()
         self._makeBlockGraph()
@@ -582,7 +580,7 @@ class SonareScene(QGraphicsScene):
     def _genMyBlocks(self):
         visited = set()
 
-        todo = set([self.func.addr])
+        todo = set([self.funcAddr])
         while todo:
             cur = todo.pop()
             if cur in visited:
@@ -782,18 +780,18 @@ class SonareWindow(QMainWindow):
         self.gotoAddr(funcAddr)
 
     def gotoAddr(self, funcAddr):
-        func = self.r2core.anal.get_fcn_at(funcAddr)
-        if func is None:
-            raise ValueError("Couldn't get func @ {:#x}".format(funcAddr))
-
-        self.scene.loadFunc(func)
+        self.scene.loadFunc(funcAddr)
 
         firstBlockItem = self.scene.blockItems[0]
         p = firstBlockItem.pos()
         r = firstBlockItem.rect()
         self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
 
-        self.funcName = func.name
+        func = self.r2core.anal.get_fcn_at(funcAddr)
+        if func is None:
+            self.funcName = '?'
+        else:
+            self.funcName = func.name
 
         self._updateWindowTitle()
 
