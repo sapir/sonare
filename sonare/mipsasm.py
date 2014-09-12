@@ -4,6 +4,9 @@ from capstone.mips_const import *
 from io import StringIO
 
 
+OFFSET_GP_GOT = 0x7ff0
+
+
 class MipsAsmFormatter:
     def __init__(self, mainWin, bigEndian=True, mode64=False):
         self.mainWin = mainWin
@@ -40,6 +43,13 @@ class MipsAsmFormatter:
 
         return '\n'.join(fmtdInsns)
 
+    def _formatOpNum(self, val):
+        addrName = self.mainWin.getAddrName(val)
+        if addrName is None:
+            return self._makeSpan("opnd num", "{:#x}", val)
+        else:
+            return self._makeSpan("opnd ref", "{}", addrName)
+
     def _formatOp(self, insn, op):
         _makeSpan = self._makeSpan
 
@@ -47,14 +57,23 @@ class MipsAsmFormatter:
             return _makeSpan("opnd reg", "${}", insn.reg_name(op.reg))
 
         elif op.type == MIPS_OP_IMM:
-            addrName = self.mainWin.getAddrName(op.imm)
-            if addrName is None:
-                return _makeSpan("opnd num", "{:#x}", op.imm)
-            else:
-                return _makeSpan("opnd ref", "{}", addrName)
+            return self._formatOpNum(op.imm)
 
         elif op.type == MIPS_OP_MEM:
             mem = op.mem
+
+            if mem.base == MIPS_REG_GP:
+                got = self.mainWin.getAddr('section..got')
+                if got:
+                    # based on
+                    # https://www.cr0.org/paper/mips.elf.external.resolution.txt
+                    # TODO: (but there's more stuff there that isn't
+                        # implemented yet)
+                    addr = got + OFFSET_GP_GOT + mem.disp
+                    # TODO: this assumes that it's a lw insn
+                    # TODO 2: in this case, we should convert insn to li/la
+                    val = self.mainWin.getWord(addr)
+                    return _makeSpan("op", "&") + self._formatOpNum(val)
 
             output = StringIO()
             output.write('<span class="opnd ptr">')
