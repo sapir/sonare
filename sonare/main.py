@@ -488,17 +488,11 @@ class SonareScene(QGraphicsScene):
     HORIZ_MARGIN = VERT_MARGIN = 40
 
 
-    def __init__(self, path, funcName):
+    def __init__(self, r2core):
         QGraphicsScene.__init__(self)
         self.setBackgroundBrush(self.VIEW_BG)
 
-        self.open(path)
-
-        func = self._getFunc(funcName)
-        self.loadFunc(func)
-
-    def open(self, path):
-        self._setupCore(path)
+        self.r2core = r2core
 
         arch = self.r2core.config.get('asm.arch')
         if arch == 'x86':
@@ -525,21 +519,6 @@ class SonareScene(QGraphicsScene):
         self._makeBlockGraph()
         self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
-
-    def _setupCore(self, path):
-        self.r2core = RCore()
-        self.r2core.file_open(path.encode('ascii'), False, 0)
-        self.r2core.bin_load("", 0)
-
-        self.r2core.anal_all()
-        print() # anal_all is noisy
-
-        # clean up function overlaps
-        self.r2core.cmd_str('aff')
-
-    def _getFunc(self, funcName):
-        funcAddr = self.r2core.num.get(funcName)
-        return self.r2core.anal.get_fcn_at(funcAddr)
 
     def _getFuncOpAddrs(self, funcAddr):
         visited = set()
@@ -718,11 +697,14 @@ class SonareScene(QGraphicsScene):
 
 
 class SonareWindow(QMainWindow):
-    def __init__(self, path, funcName):
+    def __init__(self, path):
         QMainWindow.__init__(self)
         self.setMinimumSize(QSize(600, 400))
 
-        self.scene = SonareScene(path, funcName)
+        self.filePath = path
+        self.open(path)
+
+        self.scene = SonareScene(self.r2core)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHints(
             QPainter.Antialiasing
@@ -740,13 +722,44 @@ class SonareWindow(QMainWindow):
         treeDock.setWidget(tree)
         self.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
 
+        self.funcName = None
+
+        self._updateWindowTitle()
+
+    def _updateWindowTitle(self):
+        self.setWindowTitle('Sonare - {} ({})'
+            .format(self.funcName or '?', os.path.basename(self.filePath)))
+
+    def open(self, path):
+        self.r2core = RCore()
+        self.r2core.file_open(path.encode('ascii'), False, 0)
+        self.r2core.bin_load("", 0)
+
+        self.r2core.anal_all()
+        print() # anal_all is noisy
+
+        # clean up function overlaps
+        self.r2core.cmd_str('aff')
+
+    def gotoFunc(self, funcName):
+        funcAddr = self.r2core.num.get(funcName)
+        if funcAddr is None:
+            raise ValueError("Unknown func '{}'".format(funcName))
+
+        func = self.r2core.anal.get_fcn_at(funcAddr)
+        if func is None:
+            raise ValueError("Couldn't get func @ {:#x}".format(funcAddr))
+
+        self.scene.loadFunc(func)
+
         firstBlockItem = self.scene.blockItems[0]
         p = firstBlockItem.pos()
         r = firstBlockItem.rect()
         self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
 
-        self.setWindowTitle('Sonare - {} ({})'
-            .format(funcName, os.path.basename(path)))
+        self.funcName = funcName
+
+        self._updateWindowTitle()
 
 
 if __name__ == '__main__':
@@ -756,6 +769,7 @@ if __name__ == '__main__':
         raise SystemExit("Usage: {0} <binary file> <function name>".format(args[0]))
 
     path, funcName = args[1:]
-    window = SonareWindow(path, funcName.encode('ascii'))
+    window = SonareWindow(path)
+    window.gotoFunc(funcName.encode('ascii'))
     window.showMaximized()
     app.exec_()
