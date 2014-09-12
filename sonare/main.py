@@ -11,6 +11,7 @@ from PySide.QtGui import *
 from PySide.QtWebKit import *
 from r2.r_core import RCore
 from x86asm import X86AsmFormatter
+from mipsasm import MipsAsmFormatter
 
 
 BAD_ADDR = 0xffffffffffffffff
@@ -503,6 +504,8 @@ class SonareScene(QGraphicsScene):
         arch = self.r2core.config.get('asm.arch')
         if arch == 'x86':
             self.asmFormatter = X86AsmFormatter(mainWin)
+        elif arch == 'mips':
+            self.asmFormatter = MipsAsmFormatter(mainWin)
         else:
             raise NotImplementedError("asm formatting for {}".format(arch))
 
