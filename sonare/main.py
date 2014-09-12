@@ -464,11 +464,12 @@ class SonareScene(QGraphicsScene):
         QGraphicsScene.__init__(self)
         self.setBackgroundBrush(self.VIEW_BG)
 
-        self._open(path, funcName)
+        self.open(path)
 
-    def _open(self, path, funcName):
-        self.clear()
+        func = self._getFunc(funcName)
+        self.loadFunc(func)
 
+    def open(self, path):
         self._setupCore(path)
 
         arch = self.r2core.config.get('asm.arch')
@@ -477,8 +478,20 @@ class SonareScene(QGraphicsScene):
         else:
             raise NotImplementedError("asm formatting for {}".format(arch))
 
-        self.funcName = funcName
-        self.func = self._getFunc(self.funcName)
+        self.clear()
+
+    def clear(self):
+        QGraphicsScene.clear(self)
+
+        self.func = self.blockItems = self.blockItemsByAddr = \
+            self.blockGraph = self.edgeItems = None
+
+    def loadFunc(self, func):
+        assert func is not None
+
+        self.clear()
+
+        self.func = func
 
         self._makeBlockItems()
         self._makeBlockGraph()
@@ -696,7 +709,7 @@ class SonareWindow(QMainWindow):
         self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
 
         self.setWindowTitle('Sonare - {} ({})'
-            .format(self.scene.funcName, os.path.basename(path)))
+            .format(funcName, os.path.basename(path)))
 
 
 if __name__ == '__main__':
