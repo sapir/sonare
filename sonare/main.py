@@ -722,13 +722,22 @@ class SonareWindow(QMainWindow):
 
     def _makeFlagList(self):
         model = FlagListModel(self.scene.r2core)
+
         tree = QTreeView(self)
         tree.setModel(model)
         tree.setRootIsDecorated(False)
         tree.setEditTriggers(0)
+
         treeDock = QDockWidget("Flags", self)
         treeDock.setWidget(tree)
         self.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
+
+        def onDblClick(modelIdx):
+            addrItem = model.item(modelIdx.row(), 0)
+            # TODO: store number directly instead of converting to string
+            addr = int(addrItem.text(), 16)
+            self.gotoAddr(addr)
+        tree.doubleClicked.connect(onDblClick)
 
     def _updateWindowTitle(self):
         self.setWindowTitle('Sonare - {} ({})'
@@ -752,6 +761,9 @@ class SonareWindow(QMainWindow):
         if funcAddr is None:
             raise ValueError("Unknown func '{}'".format(funcName))
 
+        self.gotoAddr(funcAddr)
+
+    def gotoAddr(self, funcAddr):
         func = self.r2core.anal.get_fcn_at(funcAddr)
         if func is None:
             raise ValueError("Couldn't get func @ {:#x}".format(funcAddr))
