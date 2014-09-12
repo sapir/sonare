@@ -12,7 +12,9 @@ class X86AsmFormatter:
             8 : 'qword',
         }
 
-    def __init__(self, mode64=False):
+    def __init__(self, mainWin, mode64=False):
+        self.mainWin = mainWin
+
         self.cs = Cs(CS_ARCH_X86, CS_MODE_64 if mode64 else CS_MODE_32)
         self.cs.detail = True
 
@@ -36,16 +38,22 @@ class X86AsmFormatter:
 
         return '\n'.join(fmtdInsns)
 
-    @staticmethod
-    def _formatOp(insn, op):
+    def _formatOp(self, insn, op):
         _makeSpan = X86AsmFormatter._makeSpan
 
         if op.type == X86_OP_REG:
             return _makeSpan("opnd reg", "{}", insn.reg_name(op.reg))
+
         elif op.type == X86_OP_IMM:
-            return _makeSpan("opnd num", "{:#x}", op.imm)
+            addrName = self.mainWin.getAddrName(op.imm)
+            if addrName is None:
+                return _makeSpan("opnd num", "{:#x}", op.imm)
+            else:
+                return _makeSpan("opnd ref", "{}", addrName)
+
         elif op.type == X86_OP_FP:
             return _makeSpan("opnd fp", "fp(?) {}", op.fp)
+
         elif op.type == X86_OP_MEM:
             mem = op.mem
 

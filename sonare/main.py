@@ -493,15 +493,16 @@ class SonareScene(QGraphicsScene):
     HORIZ_MARGIN = VERT_MARGIN = 40
 
 
-    def __init__(self, r2core):
+    def __init__(self, mainWin):
         QGraphicsScene.__init__(self)
         self.setBackgroundBrush(self.VIEW_BG)
 
-        self.r2core = r2core
+        self.mainWin = mainWin
+        self.r2core = mainWin.r2core
 
         arch = self.r2core.config.get('asm.arch')
         if arch == 'x86':
-            self.asmFormatter = X86AsmFormatter()
+            self.asmFormatter = X86AsmFormatter(mainWin)
         else:
             raise NotImplementedError("asm formatting for {}".format(arch))
 
@@ -716,7 +717,7 @@ class SonareWindow(QMainWindow):
         self._updateWindowTitle()
 
     def _makeScene(self):
-        self.scene = SonareScene(self.r2core)
+        self.scene = SonareScene(self)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHints(
             QPainter.Antialiasing
@@ -750,6 +751,8 @@ class SonareWindow(QMainWindow):
 
     def open(self, path):
         self.r2core = RCore()
+        self.r2core.flags.space_set(b'symbols')
+
         self.r2core.file_open(path.encode('ascii'), False, 0)
         self.r2core.bin_load("", 0)
 
@@ -783,6 +786,13 @@ class SonareWindow(QMainWindow):
         self.funcName = funcName
 
         self._updateWindowTitle()
+
+    def getAddrName(self, addr):
+        flag = self.r2core.flags.get_i(int(addr) & 0xffffffffffffffff)
+        if flag is None:
+            return None
+        else:
+            return flag.name
 
 
 if __name__ == '__main__':
