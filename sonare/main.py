@@ -767,8 +767,14 @@ class SonareWindow(QMainWindow):
 
         self.filePath = path
 
+    def getAddr(self, addrName):
+        if isinstance(addrName, unicode):
+            addrName = addrName.encode('ascii')
+
+        return self.r2core.num.get(addrName)
+
     def gotoFunc(self, funcName):
-        funcAddr = self.r2core.num.get(funcName)
+        funcAddr = self.getAddr(funcName)
         if funcAddr is None:
             raise ValueError("Unknown func '{}'".format(funcName))
 
