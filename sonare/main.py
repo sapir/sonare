@@ -427,16 +427,21 @@ class BlockItem(QGraphicsWebView):
                 self.formatAsm(addr, op))
             for (addr, op) in addrsAndOps]
 
+        def _maxTextWidth(htmls):
+            return max(
+                self.fontMetrics.boundingRect(stripHtmlTags(html)).width()
+                for html in htmls)
+
+        tableWidth = (
+            _maxTextWidth(fmtAddr for (fmtAddr, _, _) in formattedInsns)
+            + _maxTextWidth(fmtHex for (_, fmtHex, _) in formattedInsns)
+            + _maxTextWidth(fmtAsm for (_, _, fmtAsm) in formattedInsns)
+            + 15 * 2        # padding in pixels between columns
+            )
+
         maxLineWidth = max(
-            [
-                self.fontMetrics.boundingRect(stripHtmlTags(
-                    fmtAddr + fmtHex + fmtAsm
-                )).width()
-                + 15 * 2        # padding in pixels between columns
-                for (fmtAddr, fmtHex, fmtAsm) in formattedInsns
-            ] + [
-                self.fontMetrics.width(self.labelName + ':')
-            ])
+            tableWidth, self.fontMetrics.width(self.labelName + ':'))
+
         width = (maxLineWidth
             + 15 * 2        # padding in pixels on each side
             + 4             # 2px border on each side
