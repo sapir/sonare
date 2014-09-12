@@ -452,6 +452,34 @@ class BlockItem(QGraphicsWebView):
             labelName=self.labelName, formattedInsns=formattedInsns))
 
 
+class FlagListModel(QStandardItemModel):
+    def __init__(self, r2core):
+        QStandardItemModel.__init__(self)
+
+        self.r2core = r2core
+
+        self._update()
+
+    def _update(self):
+        self.clear()
+
+        self.setHorizontalHeaderLabels(['Address', 'Name'])
+
+        flags = self.r2core.flags
+        oldFlagSpace = flags.space_get_i(flags.space_idx)
+        flags.space_set('symbols')
+
+        # TODO: get flags through API
+        for line in self.r2core.cmd_str('f').splitlines():
+            addr, _, name = line.split(' ', 2)
+            addr = int(addr, 16)
+            self.appendRow([
+                QStandardItem('{0:#x}'.format(addr)),
+                QStandardItem(name)])
+
+        flags.space_set(oldFlagSpace)
+
+
 class SonareScene(QGraphicsScene):
     VIEW_BG = QColor(60, 60, 80)
 
@@ -702,6 +730,15 @@ class SonareWindow(QMainWindow):
             | QPainter.SmoothPixmapTransform
             | QPainter.HighQualityAntialiasing)
         self.setCentralWidget(self.view)
+
+        model = FlagListModel(self.scene.r2core)
+        tree = QTreeView(self)
+        tree.setModel(model)
+        tree.setRootIsDecorated(False)
+        tree.setEditTriggers(0)
+        treeDock = QDockWidget("Flags", self)
+        treeDock.setWidget(tree)
+        self.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
 
         firstBlockItem = self.scene.blockItems[0]
         p = firstBlockItem.pos()
