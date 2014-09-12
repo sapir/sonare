@@ -786,7 +786,7 @@ class SonareWindow(QMainWindow):
         r = firstBlockItem.rect()
         self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
 
-        self.funcName = funcName
+        self.funcName = func.name
 
         self._updateWindowTitle()
 
