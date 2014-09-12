@@ -3,6 +3,7 @@ import sys
 import os
 import networkx
 from binascii import unhexlify
+from struct import pack, unpack
 from xml.sax.saxutils import escape as xmlEscape
 from HTMLParser import HTMLParser
 from mako.template import Template
@@ -802,6 +803,17 @@ class SonareWindow(QMainWindow):
             return None
         else:
             return flag.name
+
+    @property
+    def isBigEndian(self):
+        return self.r2core.config.get('cfg.bigendian') == 'true'
+
+    def getWord(self, addr):
+        # TODO: use r2 api
+        hexStr = self.r2core.cmd_str('p8 4@{:#x}'.format(addr)).strip()
+        buf = unhexlify(hexStr)
+        fmt = '>L' if self.isBigEndian else '<L'
+        return unpack(fmt, buf)[0]
 
 
 if __name__ == '__main__':
