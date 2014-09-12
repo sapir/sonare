@@ -5,10 +5,19 @@ from io import StringIO
 
 
 class MipsAsmFormatter:
-    def __init__(self, mainWin, mode64=False):
+    def __init__(self, mainWin, bigEndian=True, mode64=False):
         self.mainWin = mainWin
 
-        self.cs = Cs(CS_ARCH_MIPS, CS_MODE_64 if mode64 else CS_MODE_32)
+        mode = 0
+        if bigEndian:
+            mode |= CS_MODE_BIG_ENDIAN
+
+        if mode64:
+            mode |= CS_MODE_64
+        else:
+            mode |= CS_MODE_32
+
+        self.cs = Cs(CS_ARCH_MIPS, mode)
         self.cs.detail = True
 
     @staticmethod
