@@ -801,11 +801,10 @@ class SonareWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     args = app.arguments()
-    if len(args) < 3:
-        raise SystemExit("Usage: {0} <binary file> <function name>".format(args[0]))
+    if len(args) < 2:
+        raise SystemExit("Usage: {0} <binary file>".format(args[0]))
 
-    path, funcName = args[1:]
+    path, = args[1:]
     window = SonareWindow(path)
-    window.gotoFunc(funcName.encode('ascii'))
     window.showMaximized()
     app.exec_()
