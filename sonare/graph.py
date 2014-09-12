@@ -329,10 +329,6 @@ class MyBlock(object):
 
 # TODO: this is rather silly. the entire scene could be a web widget
 class BlockItem(QGraphicsWebView):
-    FONT_NAME = 'Monospace'
-    FONT_SIZE = 8
-
-
     def __init__(self, mainWin, asmFormatter, myblock):
         QGraphicsWebView.__init__(self)
 
@@ -341,8 +337,7 @@ class BlockItem(QGraphicsWebView):
         self.asmFormatter = asmFormatter
         self.myblock = myblock
 
-        self.fontMetrics = QFontMetricsF(
-            QFont(self.FONT_NAME, self.FONT_SIZE))
+        self.fontMetrics = mainWin.fontMetrics
 
         self.setResizesToContents(True)
 
@@ -456,8 +451,6 @@ class BlockItem(QGraphicsWebView):
 
 
 class SonareGraphScene(QGraphicsScene):
-    VIEW_BG = QColor(60, 60, 80)
-
     GRAPHVIZ_SCALE_FACTOR = 72.
 
     HORIZ_MARGIN = VERT_MARGIN = 40
@@ -465,7 +458,8 @@ class SonareGraphScene(QGraphicsScene):
 
     def __init__(self, mainWin):
         QGraphicsScene.__init__(self)
-        self.setBackgroundBrush(self.VIEW_BG)
+
+        self.setBackgroundBrush(mainWin.BG_BRUSH)
 
         self.mainWin = mainWin
         self.r2core = mainWin.r2core

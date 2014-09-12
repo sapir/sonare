@@ -37,16 +37,41 @@ class FlagListModel(QStandardItemModel):
 
             addrItem = QStandardItem(self.mainWin.fmtNum(addr))
             addrItem.setData(addr)
+            addrItem.setForeground(self.mainWin.ADDR_COLOR)
+            addrItem.setFont(self.mainWin.font)
+            addrItem.setTextAlignment(Qt.AlignCenter)
 
-            self.appendRow([addrItem, QStandardItem(name)])
+            nameItem = QStandardItem(name)
+            nameItem.setForeground(self.mainWin.SYMBOL_COLOR)
+            nameItem.setFont(self.mainWin.font)
+
+            self.appendRow([addrItem, nameItem])
 
         flags.space_set(oldFlagSpace)
 
 
 class SonareWindow(QMainWindow):
+    # TODO: HTML should use settings specified here
+    FONT_NAME = 'Monospace'
+    FONT_SIZE = 8
+
+    BG_BRUSH = QColor(60, 60, 80)
+
+    # TODO: HTML should use settings specified here
+    ADDR_COLOR = QColor(0x7F, 0xEC, 0x91)
+    SYMBOL_COLOR = QColor(0xD8, 0xD8, 0xD8)
+
+
     def __init__(self, path):
         QMainWindow.__init__(self)
         self.setMinimumSize(QSize(600, 400))
+
+        self.font = QFont(self.FONT_NAME, self.FONT_SIZE)
+        self.fontMetrics = QFontMetricsF(self.font)
+
+        palette = self.palette()
+        palette.setColor(QPalette.Base, self.BG_BRUSH)
+        self.setPalette(palette)
 
         self.open(path)
 
@@ -72,8 +97,13 @@ class SonareWindow(QMainWindow):
 
         tree = QTreeView(self)
         tree.setModel(model)
+
         tree.setRootIsDecorated(False)
         tree.setEditTriggers(0)
+        tree.setAllColumnsShowFocus(True)
+        tree.setUniformRowHeights(True)
+        tree.setSortingEnabled(True)
+        tree.sortByColumn(0, Qt.AscendingOrder)     # sort by address
 
         treeDock = QDockWidget("Flags", self)
         treeDock.setWidget(tree)
