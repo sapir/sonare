@@ -82,7 +82,7 @@ class X86AsmFormatter:
                     indexPart += _makeSpan("op", "*")
                     indexPart += _makeSpan("ptr_scale num", "{}", mem.scale)
 
-                ptrParts.append(Part)
+                ptrParts.append(indexPart)
 
             if mem.disp or not ptrParts:
                 # don't format 0 as hex
