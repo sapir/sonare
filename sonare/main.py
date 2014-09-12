@@ -13,10 +13,11 @@ BASE_ADDR = 0x08048000
 
 
 class FlagListModel(QStandardItemModel):
-    def __init__(self, r2core):
+    def __init__(self, mainWin):
         QStandardItemModel.__init__(self)
 
-        self.r2core = r2core
+        self.mainWin = mainWin
+        self.r2core = mainWin.r2core
 
         self._update()
 
@@ -33,10 +34,11 @@ class FlagListModel(QStandardItemModel):
         for line in self.r2core.cmd_str('f').splitlines():
             addr, _, name = line.split(' ', 2)
             addr = int(addr, 16)
-            self.appendRow([
-                # TODO: use nice hex formatting
-                QStandardItem('{0:#x}'.format(addr)),
-                QStandardItem(name)])
+
+            addrItem = QStandardItem(self.mainWin.fmtNum(addr))
+            addrItem.setData(addr)
+
+            self.appendRow([addrItem, QStandardItem(name)])
 
         flags.space_set(oldFlagSpace)
 
@@ -66,7 +68,7 @@ class SonareWindow(QMainWindow):
         self.setCentralWidget(self.view)
 
     def _makeFlagList(self):
-        model = FlagListModel(self.scene.r2core)
+        model = FlagListModel(self)
 
         tree = QTreeView(self)
         tree.setModel(model)
@@ -79,8 +81,7 @@ class SonareWindow(QMainWindow):
 
         def onDblClick(modelIdx):
             addrItem = model.item(modelIdx.row(), 0)
-            # TODO: store number directly instead of converting to string
-            addr = int(addrItem.text(), 16)
+            addr = addrItem.data()
             self.gotoAddr(addr)
         tree.doubleClicked.connect(onDblClick)
 
