@@ -701,9 +701,16 @@ class SonareWindow(QMainWindow):
         QMainWindow.__init__(self)
         self.setMinimumSize(QSize(600, 400))
 
-        self.filePath = path
         self.open(path)
 
+        self._makeScene()
+        self._makeFlagList()
+
+        self.funcName = None
+
+        self._updateWindowTitle()
+
+    def _makeScene(self):
         self.scene = SonareScene(self.r2core)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHints(
@@ -713,6 +720,7 @@ class SonareWindow(QMainWindow):
             | QPainter.HighQualityAntialiasing)
         self.setCentralWidget(self.view)
 
+    def _makeFlagList(self):
         model = FlagListModel(self.scene.r2core)
         tree = QTreeView(self)
         tree.setModel(model)
@@ -721,10 +729,6 @@ class SonareWindow(QMainWindow):
         treeDock = QDockWidget("Flags", self)
         treeDock.setWidget(tree)
         self.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
-
-        self.funcName = None
-
-        self._updateWindowTitle()
 
     def _updateWindowTitle(self):
         self.setWindowTitle('Sonare - {} ({})'
@@ -740,6 +744,8 @@ class SonareWindow(QMainWindow):
 
         # clean up function overlaps
         self.r2core.cmd_str('aff')
+
+        self.filePath = path
 
     def gotoFunc(self, funcName):
         funcAddr = self.r2core.num.get(funcName)
