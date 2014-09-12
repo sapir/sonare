@@ -333,10 +333,11 @@ class BlockItem(QGraphicsWebView):
     FONT_SIZE = 8
 
 
-    def __init__(self, r2core, asmFormatter, myblock):
+    def __init__(self, mainWin, asmFormatter, myblock):
         QGraphicsWebView.__init__(self)
 
-        self.r2core = r2core
+        self.mainWin = mainWin
+        self.r2core = mainWin.r2core
         self.asmFormatter = asmFormatter
         self.myblock = myblock
 
@@ -399,11 +400,9 @@ class BlockItem(QGraphicsWebView):
 
         #     addr += op.size
 
-    @staticmethod
-    def formatAddr(addr):
+    def formatAddr(self, addr):
         '''Format address nicely as HTML'''
-        addrHex = format(addr, '08x')
-        return xmlEscape('{}:{}'.format(addrHex[:4], addrHex[4:]))
+        return xmlEscape(self.mainWin.fmtNum(addr))
 
     @staticmethod
     def formatHex(hexstring):
@@ -569,7 +568,7 @@ class SonareGraphScene(QGraphicsScene):
     def _makeBlockItems(self):
         # r2blocks = self.func.get_bbs()
         # self.blockItems = [BlockItem(self.r2core, r2b) for r2b in r2blocks]
-        self.blockItems = [BlockItem(self.r2core, self.asmFormatter, mb)
+        self.blockItems = [BlockItem(self.mainWin, self.asmFormatter, mb)
             for mb in self._genMyBlocks()]
 
         for b in self.blockItems:

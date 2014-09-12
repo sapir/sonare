@@ -46,7 +46,7 @@ class MipsAsmFormatter:
     def _formatOpNum(self, val):
         addrName = self.mainWin.getAddrName(val)
         if addrName is None:
-            return self._makeSpan("opnd num", "{:#x}", val)
+            return self._makeSpan("opnd num", "{}", self.mainWin.fmtNum(val))
         else:
             return self._makeSpan("opnd ref", "{}", addrName)
 
@@ -79,7 +79,7 @@ class MipsAsmFormatter:
             output.write('<span class="opnd ptr">')
 
             # don't format 0 as hex
-            dispStr = '{:#x}'.format(mem.disp) if mem.disp else '0'
+            dispStr = self.mainWin.fmtNum(mem.disp) if mem.disp else '0'
             output.write(_makeSpan("ptr_disp num", "{}", dispStr))
             output.write(_makeSpan("op", "("))
             output.write(_makeSpan("ptr_base reg", "${}",

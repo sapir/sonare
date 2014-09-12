@@ -47,7 +47,7 @@ class X86AsmFormatter:
         elif op.type == X86_OP_IMM:
             addrName = self.mainWin.getAddrName(op.imm)
             if addrName is None:
-                return _makeSpan("opnd num", "{:#x}", op.imm)
+                return _makeSpan("opnd num", "{}", self.mainWin.fmtNum(op.imm))
             else:
                 return _makeSpan("opnd ref", "{}", addrName)
 
@@ -86,7 +86,7 @@ class X86AsmFormatter:
 
             if mem.disp or not ptrParts:
                 # don't format 0 as hex
-                dispStr = '{:#x}'.format(mem.disp) if mem.disp else '0'
+                dispStr = self.mainWin.fmtNum(mem.disp) if mem.disp else '0'
                 ptrParts.append(_makeSpan("ptr_disp num", "{}", dispStr))
 
             partSeparator = _makeSpan("op", "+")

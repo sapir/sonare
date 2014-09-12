@@ -34,6 +34,7 @@ class FlagListModel(QStandardItemModel):
             addr, _, name = line.split(' ', 2)
             addr = int(addr, 16)
             self.appendRow([
+                # TODO: use nice hex formatting
                 QStandardItem('{0:#x}'.format(addr)),
                 QStandardItem(name)])
 
@@ -148,6 +149,18 @@ class SonareWindow(QMainWindow):
         buf = unhexlify(hexStr)
         fmt = '>L' if self.isBigEndian else '<L'
         return unpack(fmt, buf)[0]
+
+    def fmtNum(self, val):
+        if abs(val) < 10:
+            return str(val)
+
+
+        if abs(val) <= 0xffff:
+            return format(val, '#x')
+        else:
+            hexStr = format(val, '08x')
+            # split off last 2 bytes
+            return hexStr[:-4] + ':' + hexStr[-4:]
 
 
 if __name__ == '__main__':
