@@ -384,7 +384,10 @@ class BlockItem(QGraphicsWebView):
     def _getAsmOps(self):
         for op in self.myblock.ops:
             addr = op.addr
-            yield (addr, self.r2core.disassemble(addr))
+            asmOp = self.r2core.disassemble(addr)
+            assert asmOp is not None, \
+                "Couldn't disassemble @ {:#x}".format(addr)
+            yield (addr, asmOp)
 
         # addr = self.r2block.addr
         # endAddr = addr + self.r2block.size
