@@ -48,7 +48,7 @@ install first:
 
 * networkx
 
-  `sudo apt-get install networkx`
+  `sudo apt-get install python-networkx`
 
 * PySide
 
