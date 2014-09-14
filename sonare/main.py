@@ -50,12 +50,57 @@ class FlagListModel(QStandardItemModel):
         flags.space_set(oldFlagSpace)
 
 
+class FilteredTreeDock(QDockWidget):
+    def __init__(self, mainWin, name, model, parent=None):
+        QDockWidget.__init__(self, name, parent)
+
+        self.model = model
+
+        self.proxyModel = QSortFilterProxyModel()
+        self.proxyModel.setSourceModel(model)
+        self.proxyModel.setDynamicSortFilter(True)
+
+        self.treeView = QTreeView()
+        self.treeView.setModel(self.proxyModel)
+
+        self.treeView.setRootIsDecorated(False)
+        self.treeView.setEditTriggers(0)
+        self.treeView.setAllColumnsShowFocus(True)
+        self.treeView.setUniformRowHeights(True)
+        self.treeView.setSortingEnabled(True)
+
+        self.searchWidget = QLineEdit()
+        self.searchWidget.setFont(mainWin.font)
+        self.searchWidget.setPlaceholderText("Filter")
+        self.searchWidget.textChanged.connect(self._onSearchTextChanged)
+
+        vboxLayout = QVBoxLayout()
+        vboxLayout.addWidget(self.treeView)
+        vboxLayout.addWidget(self.searchWidget)
+
+        vbox = QWidget(self)
+        vbox.setLayout(vboxLayout)
+
+        self.setWidget(vbox)
+
+    def setFilterKeyColumn(self, idx):
+        self.proxyModel.setFilterKeyColumn(idx)
+
+    def sortByColumn(self, idx, order):
+        self.treeView.sortByColumn(idx, order)
+
+    def _onSearchTextChanged(self, text):
+        regexp = QRegExp(text, Qt.CaseInsensitive)
+        self.proxyModel.setFilterRegExp(regexp)
+
+
 class SonareWindow(QMainWindow):
     # TODO: HTML should use settings specified here
     FONT_NAME = 'Monospace'
     FONT_SIZE = 8
 
     BG_BRUSH = QColor(60, 60, 80)
+    DEFAULT_TEXT_COLOR = QColor(0xD8, 0xD8, 0xD8)
 
     # TODO: HTML should use settings specified here
     ADDR_COLOR = QColor(0x7F, 0xEC, 0x91)
@@ -71,6 +116,7 @@ class SonareWindow(QMainWindow):
 
         palette = self.palette()
         palette.setColor(QPalette.Base, self.BG_BRUSH)
+        palette.setColor(QPalette.Text, self.DEFAULT_TEXT_COLOR)
         self.setPalette(palette)
 
         self.open(path)
@@ -95,25 +141,21 @@ class SonareWindow(QMainWindow):
     def _makeFlagList(self):
         model = FlagListModel(self)
 
-        tree = QTreeView(self)
-        tree.setModel(model)
+        ftdock = FilteredTreeDock(self, "Flags", model, self)
+        ftdock.setFilterKeyColumn(1)                  # filter by name
+        ftdock.sortByColumn(0, Qt.AscendingOrder)     # sort by address
 
-        tree.setRootIsDecorated(False)
-        tree.setEditTriggers(0)
-        tree.setAllColumnsShowFocus(True)
-        tree.setUniformRowHeights(True)
-        tree.setSortingEnabled(True)
-        tree.sortByColumn(0, Qt.AscendingOrder)     # sort by address
-
-        treeDock = QDockWidget("Flags", self)
-        treeDock.setWidget(tree)
-        self.addDockWidget(Qt.LeftDockWidgetArea, treeDock)
+        self.addDockWidget(Qt.LeftDockWidgetArea, ftdock)
 
         def onDblClick(modelIdx):
-            addrItem = model.item(modelIdx.row(), 0)
-            addr = addrItem.data()
+            addrItemIdx = modelIdx.sibling(modelIdx.row(), 0)
+
+            # this is actually the proxy model
+            model = ftdock.treeView.model()
+            addr = model.data(addrItemIdx, Qt.UserRole + 1)
             self.gotoAddr(addr)
-        tree.doubleClicked.connect(onDblClick)
+
+        ftdock.treeView.doubleClicked.connect(onDblClick)
 
     def _updateWindowTitle(self):
         self.setWindowTitle('Sonare - {} ({})'
