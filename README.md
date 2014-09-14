@@ -4,6 +4,9 @@ Sonare
 A Qt-based disassembly viewer based on
 [radare2](https://github.com/radare/radare2/).
 
+Currently also uses [capstone](https://github.com/aquynh/capstone)
+directly (rather than through radare2) for syntax highlighting.
+
 ![a screenshot](/doc/screenshot-test.png?raw=true)
 
 
@@ -25,7 +28,7 @@ tree.)
 Sonare currently has the following dependencies, which you'll need to
 install first:
 
-* python 2.7 (2.6 may be ok, too. 2.5 probably won't be.)
+* Python 2.7 (2.6 may be ok, too. 2.5 probably won't be.)
 
 * [radare2](https://github.com/radare/radare2)
 
@@ -50,7 +53,7 @@ install first:
 * PySide
 
   ```
-  sudo apt-get install python-pyside.qtcore python-pyside.qtgui
+  sudo apt-get install python-pyside.qtcore python-pyside.qtgui \
       python-pyside.qtwebkit
   ```
 
