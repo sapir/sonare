@@ -1,4 +1,5 @@
 from __future__ import print_function
+import sys
 import networkx
 from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
