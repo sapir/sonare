@@ -6,10 +6,12 @@ from struct import pack, unpack
 from PySide.QtCore import *
 from PySide.QtGui import *
 from r2.r_core import RCore
-from graph import SonareGraphScene
+import graph
 
 
 BASE_ADDR = 0x08048000
+
+MAIN_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class FlagListModel(QStandardItemModel):
@@ -129,7 +131,7 @@ class SonareWindow(QMainWindow):
         self._updateWindowTitle()
 
     def _makeScene(self):
-        self.scene = SonareGraphScene(self)
+        self.scene = graph.SonareGraphScene(self)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHints(
             QPainter.Antialiasing

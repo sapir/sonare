@@ -1,5 +1,6 @@
 from __future__ import print_function
 import sys
+import os
 import networkx
 from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
@@ -10,6 +11,7 @@ from PySide.QtGui import *
 from PySide.QtWebKit import *
 from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
+import main
 
 
 BAD_ADDR = 0xffffffffffffffff
@@ -449,7 +451,7 @@ class BlockItem(QGraphicsWebView):
 
         self.page().setPreferredContentsSize(QSize(width, height))
 
-        tmpl = Template(filename='sonare/block.html')
+        tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'block.html'))
         self.setHtml(tmpl.render(
             labelName=self.labelName, formattedInsns=formattedInsns))
 
