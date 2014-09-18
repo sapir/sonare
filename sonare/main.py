@@ -190,18 +190,19 @@ class SonareWindow(QMainWindow):
         self.gotoAddr(funcAddr)
 
     def gotoAddr(self, funcAddr):
+        func = self.r2core.anal.get_fcn_at(funcAddr)
+        if func is None:
+            self.funcName = '?'
+        else:
+            self.funcName = func.name
+            funcAddr = func.addr
+
         self.scene.loadFunc(funcAddr)
 
         firstBlockItem = self.scene.blockItems[0]
         p = firstBlockItem.pos()
         r = firstBlockItem.rect()
         self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
-
-        func = self.r2core.anal.get_fcn_at(funcAddr)
-        if func is None:
-            self.funcName = '?'
-        else:
-            self.funcName = func.name
 
         self._updateWindowTitle()
 
