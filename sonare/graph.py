@@ -485,6 +485,9 @@ class SonareGraphScene(QGraphicsScene):
             self.blockGraph = self.edgeItems = None
 
     def loadFunc(self, funcAddr):
+        if funcAddr == self.funcAddr:
+            return
+
         self.clear()
 
         self.funcAddr = funcAddr
