@@ -101,7 +101,8 @@ class SonareWindow(QMainWindow):
     FONT_NAME = 'Monospace'
     FONT_SIZE = 8
 
-    BG_BRUSH = QColor(60, 60, 80)
+    WINDOW_COLOR       = QColor(0x3c, 0x3c, 0x3c)
+    BG_COLOR           = QColor(0x50, 0x50, 0x64)
     DEFAULT_TEXT_COLOR = QColor(0xD8, 0xD8, 0xD8)
 
     # TODO: HTML should use settings specified here
@@ -117,7 +118,9 @@ class SonareWindow(QMainWindow):
         self.fontMetrics = QFontMetricsF(self.font)
 
         palette = self.palette()
-        palette.setColor(QPalette.Base, self.BG_BRUSH)
+        # palette.setColor(QPalette.Window, self.WINDOW_COLOR)
+        # palette.setColor(QPalette.WindowText, self.DEFAULT_TEXT_COLOR)
+        palette.setColor(QPalette.Base, self.BG_COLOR)
         palette.setColor(QPalette.Text, self.DEFAULT_TEXT_COLOR)
         self.setPalette(palette)
 
@@ -201,10 +204,9 @@ class SonareWindow(QMainWindow):
 
         self.scene.loadFunc(funcAddr)
 
-        firstBlockItem = self.scene.blockItems[0]
-        p = firstBlockItem.pos()
-        r = firstBlockItem.rect()
-        self.view.centerOn(p.x() + r.center().x(), p.y() + r.top())
+        firstGraphBlock = self.scene.graphBlocks[0]
+        r = firstGraphBlock.rect()
+        self.view.centerOn(r.center().x(), r.top())
 
         self._updateWindowTitle()
 

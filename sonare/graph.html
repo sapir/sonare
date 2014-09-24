@@ -1,0 +1,56 @@
+<html>
+<head>
+    <title>Blocks</title>
+    <!-- <link rel="stylesheet" type="text/css" href="graph.css" /> -->
+    <style>
+html, table         { font-family: 'Monospace'; font-size: 8pt;
+                      font-weight: medium; }
+
+body                { margin: 0; padding: 0; background: #3c3c3c; }
+
+div.block           { border: 2px solid #222240; background: #505064;
+                      margin: 0; padding: 10px 15px; }
+
+div.label           { margin-left: -2px; }
+
+
+table               { border-collapse: collapse; border-spacing: 0px; }
+table, tr, td       { margin: 0; padding: 0; white-space: nowrap; }
+td:not(:last-child) { padding-right: 15px; }
+
+/*.addr               { color: #B673E5; }*/
+.hex                { color: #EEBA6B; }
+.ptr_size           { color: #B5D3DD; font-style: italic; }
+.addr, .num         { color: #7FEC91; }
+
+.label, .ref        { color: #D8D8D8; font-weight: bold; }
+.hex, .op           { color: #D8D8D8; }
+.mnem               { color: #ECDE17; }
+.reg                { color: #E96976; }
+
+div.label:hover     { background: #404054; }
+tr:hover            { background: #404054;
+                      border-top: 1px solid #222240;
+                      border-bottom: 1px solid #222240; }
+    </style>
+</head>
+<body>
+    % for b in blocks:
+    <!-- TODO: use ems for width -->
+    <div id="${b.elementID}" class="block"
+            style="display: table; position: absolute;">
+        <div class="label">${b.labelName}:</div>
+        <table>
+            % for (addr, hex, asm) in b.formatInsns():
+            <tr>
+            <td class="addr">${addr}</td>
+            <td class="hex">${hex}</td>
+            <td class="asm">${asm}</td>
+            </tr>
+            % endfor
+        </table>
+        </div>
+    </div>
+    % endfor
+</body>
+</html>

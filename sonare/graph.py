@@ -110,10 +110,10 @@ class EdgeItem(QGraphicsPathItem):
     EPSILON = 0.5
 
 
-    def __init__(self, type_, block1, block2):
+    def __init__(self, type_, block1, block2, parent):
         '''type can be "jump", "ok" or "fail".'''
 
-        QGraphicsPathItem.__init__(self)
+        QGraphicsPathItem.__init__(self, parent)
         self.type_ = type_
         self.block1 = block1
         self.block2 = block2
@@ -144,7 +144,7 @@ class EdgeItem(QGraphicsPathItem):
         return self.REVERSE_EDGE_WIDTH if isReverse else self.EDGE_WIDTH
 
     def _xOffset(self, outgoing=True):
-        # note that BlockItem keeps edge items sorted by X
+        # note that GraphBlock keeps edge items sorted by X
         if outgoing:
             edges = self.block1.outgoingEdgeItems
         else:
@@ -170,15 +170,12 @@ class EdgeItem(QGraphicsPathItem):
             QPointF(path.elementAt(elemCnt - 1)))
 
     def updatePos(self):
-        pos1 = self.block1.pos()
-        pos2 = self.block2.pos()
-
-        rect1 = self.block1.rect().translated(pos1)
-        rect2 = self.block2.rect().translated(pos2)
+        rect1 = self.block1.rect()
+        rect2 = self.block2.rect()
 
         # TODO: horrible algorithm
-        p1 = QPointF(rect1.center().x() + self._xOffset(True), rect1.bottom())
-        p2 = QPointF(rect2.center().x() + self._xOffset(False), rect2.top())
+        self.p1 = p1 = QPointF(rect1.center().x() + self._xOffset(True), rect1.bottom())
+        self.p2 = p2 = QPointF(rect2.center().x() + self._xOffset(False), rect2.top())
 
         # edges always leave the bottom of the block. move down
         # MIN_VERT_LENGTH before trying to get to p2.
@@ -248,16 +245,16 @@ class EdgeItem(QGraphicsPathItem):
         while inters:
             dp = QVector2D(p2 - p1).normalized().toPointF()
 
-            blockItem, p1b = inters.pop(0)
-            blockItem2, p2a = inters.pop(0)
-            assert blockItem2 is blockItem
+            graphBlock, p1b = inters.pop(0)
+            graphBlock2, p2a = inters.pop(0)
+            assert graphBlock2 is graphBlock
 
             # move both points away from the block
             p1b -= dp * self.MIN_VERT_LENGTH
             p2a += dp * self.MIN_VERT_LENGTH
 
             # now we need to find a way around the block.
-            r = blockItem.rect().translated(blockItem.pos())
+            r = graphBlock.rect()
             r.adjust(-self.MIN_VERT_LENGTH, -self.MIN_VERT_LENGTH,
                 self.MIN_VERT_LENGTH, self.MIN_VERT_LENGTH)
 
@@ -330,24 +327,18 @@ class MyBlock(object):
         return normalizeAddr(self.endOp.fail)
 
 
-# TODO: this is rather silly. the entire scene could be a web widget
-class BlockItem(QGraphicsWebView):
-    def __init__(self, mainWin, asmFormatter, myblock):
-        QGraphicsWebView.__init__(self)
-
+class GraphBlock(object):
+    def __init__(self, mainWin, graphItem, asmFormatter, myblock):
         self.mainWin = mainWin
-        self.r2core = mainWin.r2core
+        self.graphItem = graphItem
         self.asmFormatter = asmFormatter
         self.myblock = myblock
 
-        self.fontMetrics = mainWin.fontMetrics
-
-        self.setResizesToContents(True)
-
-        self._updateText()
-
         self.outgoingEdgeItems = []
         self.incomingEdgeItems = []
+
+        self._pos = QPointF()
+        self._element = None
 
     @property
     def addr(self):
@@ -366,8 +357,54 @@ class BlockItem(QGraphicsWebView):
         return 'blk_{0:x}'.format(self.addr)
 
     @property
+    def x(self):
+        return self._pos.x()
+
+    @property
+    def y(self):
+        return self._pos.y()
+
+    def setPos(self, x, y):
+        elem = self.getElement()
+        elem.setStyleProperty("left", "{:.2f}px".format(x))
+        elem.setStyleProperty("top",  "{:.2f}px".format(y))
+
+        self._pos = QPointF(x, y)
+
+    @property
+    def width(self):
+        return self.size().width()
+
+    @property
+    def height(self):
+        return self.size().height()
+
+    def size(self):
+        return self.getElement().geometry().size()
+
+    def rect(self):
+        r = self.getElement().geometry()
+        r.translate(self._pos.toPoint())
+        return r
+
+    @property
     def centerX(self):
-        return self.x() + self.rect().width() / 2.
+        return self.x + self.width / 2.
+
+    @property
+    def elementID(self):
+        return "b{:08x}".format(self.addr)
+
+    def getElement(self):
+        # (this only works after the element is created. first the GraphBlock
+            # is created, then it's used as an input to the html template,
+            # then we can get the QWebPageElements from the template output)
+
+        if self._element is None:
+            frame = self.graphItem.page().mainFrame()
+            self._element = frame.findFirstElement("#" + self.elementID)
+
+        return self._element
 
     def resortEdgeItems(self):
         '''this needs to be called after block positions are updated.'''
@@ -387,7 +424,7 @@ class BlockItem(QGraphicsWebView):
     def _getAsmOps(self):
         for op in self.myblock.ops:
             addr = op.addr
-            asmOp = self.r2core.disassemble(addr)
+            asmOp = self.mainWin.r2core.disassemble(addr)
             assert asmOp is not None, \
                 "Couldn't disassemble @ {:#x}".format(addr)
             yield (addr, asmOp)
@@ -396,7 +433,7 @@ class BlockItem(QGraphicsWebView):
         # endAddr = addr + self.r2block.size
 
         # while addr < endAddr:
-        #     op = self.r2core.disassemble(addr)
+        #     op = self.mainWin.r2core.disassemble(addr)
         #     yield (addr, op)
 
         #     addr += op.size
@@ -418,44 +455,16 @@ class BlockItem(QGraphicsWebView):
         '''Format op's assembly nicely as HTML'''
         return self.asmFormatter.format(unhexlify(op.get_hex()), addr)
 
-    def _updateText(self):
+    def formatInsns(self):
         addrsAndOps = list(self._getAsmOps())
 
-        formattedInsns = [
+        return [
             (self.formatAddr(addr), self.formatHex(op.get_hex()),
                 self.formatAsm(addr, op))
             for (addr, op) in addrsAndOps]
 
-        def _maxTextWidth(htmls):
-            return max(
-                self.fontMetrics.boundingRect(stripHtmlTags(html)).width()
-                for html in htmls)
 
-        tableWidth = (
-            _maxTextWidth(fmtAddr for (fmtAddr, _, _) in formattedInsns)
-            + _maxTextWidth(fmtHex for (_, fmtHex, _) in formattedInsns)
-            + _maxTextWidth(fmtAsm for (_, _, fmtAsm) in formattedInsns)
-            + 15 * 2        # padding in pixels between columns
-            )
-
-        maxLineWidth = max(
-            tableWidth, self.fontMetrics.width(self.labelName + ':'))
-
-        width = (maxLineWidth
-            + 15 * 2        # padding in pixels on each side
-            + 4             # 2px border on each side
-            )
-
-        # there are (len(addrsAndOps) + 1) lines, including the label
-        height = self.fontMetrics.lineSpacing() * len(addrsAndOps)
-
-        self.page().setPreferredContentsSize(QSize(width, height))
-
-        tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'block.html'))
-        self.setHtml(tmpl.render(
-            labelName=self.labelName, formattedInsns=formattedInsns))
-
-
+# TODO: use a QWebView directly instead of QGraphicsScene
 class SonareGraphScene(QGraphicsScene):
     GRAPHVIZ_SCALE_FACTOR = 72.
 
@@ -465,7 +474,7 @@ class SonareGraphScene(QGraphicsScene):
     def __init__(self, mainWin):
         QGraphicsScene.__init__(self)
 
-        self.setBackgroundBrush(mainWin.BG_BRUSH)
+        self.setBackgroundBrush(mainWin.WINDOW_COLOR)
 
         self.mainWin = mainWin
         self.r2core = mainWin.r2core
@@ -483,7 +492,7 @@ class SonareGraphScene(QGraphicsScene):
     def clear(self):
         QGraphicsScene.clear(self)
 
-        self.funcAddr = self.blockItems = self.blockItemsByAddr = \
+        self.funcAddr = self.graphBlocks = self.graphBlocksByAddr = \
             self.blockGraph = self.edgeItems = None
 
     def loadFunc(self, funcAddr):
@@ -494,7 +503,8 @@ class SonareGraphScene(QGraphicsScene):
 
         self.funcAddr = funcAddr
 
-        self._makeBlockItems()
+        self._makeGraphItem()
+
         self._makeBlockGraph()
         self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
@@ -568,20 +578,31 @@ class SonareGraphScene(QGraphicsScene):
             if mb.fail:
                 todo.add(mb.fail)
 
-    def _makeBlockItems(self):
+    def _makeGraphItem(self):
+        self.graphItem = QGraphicsWebView()
+        self.graphItem.setResizesToContents(True)
+        self.graphItem.setPos(0, 0)
+        self.graphItem.setZValue(-1)    # put under edges
+
         # r2blocks = self.func.get_bbs()
-        # self.blockItems = [BlockItem(self.r2core, r2b) for r2b in r2blocks]
-        self.blockItems = [BlockItem(self.mainWin, self.asmFormatter, mb)
+        # self.graphBlocks = [
+        #     GraphBlock(self.mainWin, self.graphItem, self.asmFormatter, r2b)
+        #     for r2b in r2blocks]
+        self.graphBlocks = [
+            GraphBlock(self.mainWin, self.graphItem, self.asmFormatter, mb)
             for mb in self._genMyBlocks()]
 
-        for b in self.blockItems:
-            self.addItem(b)
+        self.graphBlocksByAddr = dict((b.addr, b) for b in self.graphBlocks)
 
-        self.blockItemsByAddr = dict((b.addr, b) for b in self.blockItems)
+        tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'graph.html'))
+        html = tmpl.render(blocks=self.graphBlocks)
+        self.graphItem.setHtml(html)
+
+        self.addItem(self.graphItem)
 
     def _makeBlockGraph(self):
         self.blockGraph = networkx.DiGraph()
-        for b in self.blockItems:
+        for b in self.graphBlocks:
             r = b.rect()
             self.blockGraph.add_node(b.addr,
                 # attributes for graphviz
@@ -603,15 +624,14 @@ class SonareGraphScene(QGraphicsScene):
         for b1Addr, b2Addr, edgeData in self.blockGraph.edges_iter(data=True):
             edgeType = edgeData['type']
             try:
-                b1 = self.blockItemsByAddr[b1Addr]
-                b2 = self.blockItemsByAddr[b2Addr]
+                b1 = self.graphBlocksByAddr[b1Addr]
+                b2 = self.graphBlocksByAddr[b2Addr]
             except LookupError:
                 print('missing:', hex(b1Addr), 'or', hex(b2Addr),
                     file=sys.stderr)
                 continue
 
-            edgeItem = EdgeItem(edgeType, b1, b2)
-            self.addItem(edgeItem)
+            edgeItem = EdgeItem(edgeType, b1, b2, self.graphItem)
 
             self.edgeItems[b1Addr, b2Addr] = edgeItem
 
@@ -619,44 +639,47 @@ class SonareGraphScene(QGraphicsScene):
         # dot is for directed graphs
         layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
 
-        # update blocks with the layout graphviz gave us
+        fixedLayout = {}
         for blockAddr, pos in layout.items():
-            try:
-                block = self.blockItemsByAddr[blockAddr]
-            except LookupError:
-                print('missing:', hex(blockAddr), file=sys.stderr)
-                continue
+            block = self.graphBlocksByAddr[blockAddr]
 
             x, y = pos
+
             y = -y      # graphviz likes y to grow upward
 
             # graphviz gives us center position for node, but we need the
             # top-left
-            r = block.rect()
-            x -= r.width() / 2.
-            y -= r.height() / 2.
+            s = block.size()
+            x -= s.width() / 2.
+            y -= s.height() / 2.
 
-            block.setPos(QPoint(x, y))
+            fixedLayout[blockAddr] = (x, y)
 
-        # resort blocks' edge item lists
-        for blockItem in self.blockItems:
-            blockItem.resortEdgeItems()
+        # set position, but adjust so minimum (x,y) is at (0, 0)
+        minX = min(x for (x, _) in fixedLayout.itervalues())
+        minY = min(y for (_, y) in fixedLayout.itervalues())
+        for graphBlock in self.graphBlocks:
+            x, y = fixedLayout[graphBlock.addr]
+            graphBlock.setPos(x - minX, y - minY)
+
+        # now we moved the blocks around, resort the blocks' edge item lists
+        for graphBlock in self.graphBlocks:
+            graphBlock.resortEdgeItems()
 
         # update edges according to block positions
         for edge in self.edgeItems.itervalues():
             edge.updatePos()
 
-        # reset scene rect
-        rect = self.itemsBoundingRect()
-        rect.adjust(
+        # TODO: perhaps margins should be inside the graphItem
+        r = reduce(QRect.united, (gb.rect() for gb in self.graphBlocks))
+        r.adjust(
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
-            self.HORIZ_MARGIN, self.VERT_MARGIN)
-        self.setSceneRect(rect)
+             self.HORIZ_MARGIN,  self.VERT_MARGIN)
+        self.setSceneRect(r)
 
     def intersectLineWithBlocks(self, line):
-        for blockItem in self.blockItems:
-            r = blockItem.rect()
-            r.translate(blockItem.pos())
+        for graphBlock in self.graphBlocks:
+            r = graphBlock.rect()
 
             # convert rectangle to lines
             rpts = [r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft(),
@@ -669,7 +692,7 @@ class SonareGraphScene(QGraphicsScene):
                 if intrtype != QLineF.BoundedIntersection:
                     continue
 
-                yield (blockItem, intrpt)
+                yield (graphBlock, intrpt)
 
     def doesLineIntersectWithBlocks(self, line):
         return not isEmptyIterable(self.intersectLineWithBlocks(line))
