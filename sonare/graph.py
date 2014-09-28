@@ -326,6 +326,48 @@ class MyBlock(object):
     def fail(self):
         return normalizeAddr(self.endOp.fail)
 
+    @staticmethod
+    def _makeMyBlockAt(r2core, addr):
+        ops = []
+        endOp = None
+
+        opsLeft = -1
+        while opsLeft != 0:
+            op = r2core.op_anal(addr)
+            ops.append(op)
+
+            if isEndBlockOp(op):
+                endOp = op
+                # +1 including this one
+                opsLeft = op.delay + 1
+
+            addr += op.size
+            if opsLeft > 0:
+                opsLeft -= 1
+
+        return MyBlock(ops, endOp)
+
+    @staticmethod
+    def _makeFuncBlocks(r2core, funcAddr):
+        visited = set()
+
+        todo = set([funcAddr])
+        while todo:
+            cur = todo.pop()
+            if cur in visited:
+                continue
+
+            visited.add(cur)
+
+            mb = MyBlock._makeMyBlockAt(r2core, cur)
+            yield mb
+
+            if mb.jump:
+                todo.add(mb.jump)
+
+            if mb.fail:
+                todo.add(mb.fail)
+
 
 class GraphBlock(object):
     def __init__(self, mainWin, graphItem, asmFormatter, myblock):
@@ -509,75 +551,6 @@ class SonareGraphScene(QGraphicsScene):
         self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
 
-    def _getFuncOpAddrs(self, funcAddr):
-        visited = set()
-
-        todo = set([funcAddr])
-        while todo:
-            cur = todo.pop()
-            visited.add(cur)
-
-            op = self.r2core.op_anal(cur)
-            if normalizeAddr(op.jump) is not None:
-                todo.add(op.jump)
-
-                if normalizeAddr(op.fail) is not None:
-                    todo.add(op.fail)
-
-                nextOpsToAdd = op.delay
-            else:
-                # not a jump
-                nextOpsToAdd = 1
-
-            for i in xrange(nextOpsToAdd):
-                op = self.r2core.op_anal(cur)
-                cur += op.size
-                todo.add(cur)
-
-            todo.difference_update(visited)
-
-        return visited
-
-    def _makeMyBlockAt(self, addr):
-        ops = []
-        endOp = None
-
-        opsLeft = -1
-        while opsLeft != 0:
-            op = self.r2core.op_anal(addr)
-            ops.append(op)
-
-            if isEndBlockOp(op):
-                endOp = op
-                # +1 including this one
-                opsLeft = op.delay + 1
-
-            addr += op.size
-            if opsLeft > 0:
-                opsLeft -= 1
-
-        return MyBlock(ops, endOp)
-
-    def _genMyBlocks(self):
-        visited = set()
-
-        todo = set([self.funcAddr])
-        while todo:
-            cur = todo.pop()
-            if cur in visited:
-                continue
-
-            visited.add(cur)
-
-            mb = self._makeMyBlockAt(cur)
-            yield mb
-
-            if mb.jump:
-                todo.add(mb.jump)
-
-            if mb.fail:
-                todo.add(mb.fail)
-
     def _makeGraphItem(self):
         self.graphItem = QGraphicsWebView()
         self.graphItem.setResizesToContents(True)
@@ -590,7 +563,7 @@ class SonareGraphScene(QGraphicsScene):
         #     for r2b in r2blocks]
         self.graphBlocks = [
             GraphBlock(self.mainWin, self.graphItem, self.asmFormatter, mb)
-            for mb in self._genMyBlocks()]
+            for mb in MyBlock._makeFuncBlocks(self.r2core, self.funcAddr)]
 
         self.graphBlocksByAddr = dict((b.addr, b) for b in self.graphBlocks)
 
