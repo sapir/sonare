@@ -41,11 +41,11 @@ tr:hover            { background: #404054;
             style="display: table; position: absolute;">
         <div class="label">${b.labelName}:</div>
         <table>
-            % for (addr, hex, asm) in b.formatInsns():
+            % for (addr, asmOp) in b.asmOps:
             <tr>
-            <td class="addr">${addr}</td>
-            <td class="hex">${hex}</td>
-            <td class="asm">${asm}</td>
+            <td class="addr">${addr | n,fmtAddr}</td>
+            <td class="hex">${asmOp.get_hex() | n,fmtHex}</td>
+            <td class="asm">${fmtAsm(addr, asmOp)}</td>
             </tr>
             % endfor
         </table>

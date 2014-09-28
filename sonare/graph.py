@@ -460,7 +460,8 @@ class GraphBlock(object):
         self.incomingEdgeItems.append(edgeItem)
         self.resortEdgeItems()
 
-    def _getAsmOps(self):
+    @property
+    def asmOps(self):
         for op in self.myblock.ops:
             addr = op.addr
             asmOp = self.mainWin.r2core.disassemble(addr)
@@ -476,31 +477,6 @@ class GraphBlock(object):
         #     yield (addr, op)
 
         #     addr += op.size
-
-    def formatAddr(self, addr):
-        '''Format address nicely as HTML'''
-        return xmlEscape(self.mainWin.fmtNum(addr))
-
-    @staticmethod
-    def formatHex(hexstring):
-        '''Add spaces between hex chars, format nicely as HTML'''
-        assert len(hexstring) % 2 == 0
-        hexWithSpaces = ' '.join(
-            hexstring[i:i+2]
-            for i in xrange(0, len(hexstring), 2))
-        return xmlEscape(hexWithSpaces)
-
-    def formatAsm(self, addr, op):
-        '''Format op's assembly nicely as HTML'''
-        return self.mainWin.asmFormatter.format(unhexlify(op.get_hex()), addr)
-
-    def formatInsns(self):
-        addrsAndOps = list(self._getAsmOps())
-
-        return [
-            (self.formatAddr(addr), self.formatHex(op.get_hex()),
-                self.formatAsm(addr, op))
-            for (addr, op) in addrsAndOps]
 
 
 # TODO: use a QWebView directly instead of QGraphicsScene
@@ -570,10 +546,31 @@ class SonareGraphScene(QGraphicsScene):
             block.graphItem = self.graphItem
 
         tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'graph.html'))
-        html = tmpl.render(blocks=self.graphBlocks)
+        html = tmpl.render(
+            blocks=self.graphBlocks,
+            fmtAddr=self._formatAddr,
+            fmtHex=self._formatHex,
+            fmtAsm=self._formatAsm)
         self.graphItem.setHtml(html)
 
         self.addItem(self.graphItem)
+
+    def _formatAddr(self, addr):
+        '''Format address nicely as HTML'''
+        return xmlEscape(self.mainWin.fmtNum(addr))
+
+    def _formatHex(self, hexstring):
+        '''Add spaces between hex chars, format nicely as HTML'''
+
+        assert len(hexstring) % 2 == 0
+        hexWithSpaces = ' '.join(
+            hexstring[i:i+2]
+            for i in xrange(0, len(hexstring), 2))
+        return xmlEscape(hexWithSpaces)
+
+    def _formatAsm(self, addr, op):
+        '''Format op's assembly nicely as HTML'''
+        return self.mainWin.asmFormatter.format(unhexlify(op.get_hex()), addr)
 
     def _makeEdgeItemsFromGraph(self):
         self.edgeItems = {}
