@@ -6,6 +6,8 @@ from struct import pack, unpack
 from PySide.QtCore import *
 from PySide.QtGui import *
 from r2.r_core import RCore
+from x86asm import X86AsmFormatter
+from mipsasm import MipsAsmFormatter
 import graph
 
 
@@ -180,6 +182,14 @@ class SonareWindow(QMainWindow):
         self.r2core.cmd_str('aff')
 
         self.filePath = path
+
+        arch = self.r2core.config.get('asm.arch')
+        if arch == 'x86':
+            self.asmFormatter = X86AsmFormatter(self)
+        elif arch == 'mips':
+            self.asmFormatter = MipsAsmFormatter(self)
+        else:
+            raise NotImplementedError("asm formatting for {}".format(arch))
 
     def getAddr(self, addrName):
         if isinstance(addrName, unicode):

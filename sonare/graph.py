@@ -9,8 +9,6 @@ from mako.template import Template
 from PySide.QtCore import *
 from PySide.QtGui import *
 from PySide.QtWebKit import *
-from x86asm import X86AsmFormatter
-from mipsasm import MipsAsmFormatter
 import main
 
 
@@ -370,10 +368,9 @@ class MyBlock(object):
 
 
 class GraphBlock(object):
-    def __init__(self, mainWin, graphItem, asmFormatter, myblock):
+    def __init__(self, mainWin, graphItem, myblock):
         self.mainWin = mainWin
         self.graphItem = graphItem
-        self.asmFormatter = asmFormatter
         self.myblock = myblock
 
         self.outgoingEdgeItems = []
@@ -495,7 +492,7 @@ class GraphBlock(object):
 
     def formatAsm(self, addr, op):
         '''Format op's assembly nicely as HTML'''
-        return self.asmFormatter.format(unhexlify(op.get_hex()), addr)
+        return self.mainWin.asmFormatter.format(unhexlify(op.get_hex()), addr)
 
     def formatInsns(self):
         addrsAndOps = list(self._getAsmOps())
@@ -520,14 +517,6 @@ class SonareGraphScene(QGraphicsScene):
 
         self.mainWin = mainWin
         self.r2core = mainWin.r2core
-
-        arch = self.r2core.config.get('asm.arch')
-        if arch == 'x86':
-            self.asmFormatter = X86AsmFormatter(mainWin)
-        elif arch == 'mips':
-            self.asmFormatter = MipsAsmFormatter(mainWin)
-        else:
-            raise NotImplementedError("asm formatting for {}".format(arch))
 
         self.clear()
 
@@ -559,10 +548,10 @@ class SonareGraphScene(QGraphicsScene):
 
         # r2blocks = self.func.get_bbs()
         # self.graphBlocks = [
-        #     GraphBlock(self.mainWin, self.graphItem, self.asmFormatter, r2b)
+        #     GraphBlock(self.mainWin, self.graphItem, r2b)
         #     for r2b in r2blocks]
         self.graphBlocks = [
-            GraphBlock(self.mainWin, self.graphItem, self.asmFormatter, mb)
+            GraphBlock(self.mainWin, self.graphItem, mb)
             for mb in MyBlock._makeFuncBlocks(self.r2core, self.funcAddr)]
 
         self.graphBlocksByAddr = dict((b.addr, b) for b in self.graphBlocks)
