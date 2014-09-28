@@ -368,9 +368,9 @@ class MyBlock(object):
 
 
 class GraphBlock(object):
-    def __init__(self, mainWin, graphItem, myblock):
+    def __init__(self, mainWin, myblock):
         self.mainWin = mainWin
-        self.graphItem = graphItem
+        self.graphItem = None       # filled in later
         self.myblock = myblock
 
         self.outgoingEdgeItems = []
@@ -533,44 +533,25 @@ class SonareGraphScene(QGraphicsScene):
 
         self.funcAddr = funcAddr
 
-        self._makeGraphItem()
-
         self._makeBlockGraph()
+        self._makeGraphItem()
         self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
 
-    def _makeGraphItem(self):
-        self.graphItem = QGraphicsWebView()
-        self.graphItem.setResizesToContents(True)
-        self.graphItem.setPos(0, 0)
-        self.graphItem.setZValue(-1)    # put under edges
-
+    def _makeBlockGraph(self):
         # r2blocks = self.func.get_bbs()
         # self.graphBlocks = [
-        #     GraphBlock(self.mainWin, self.graphItem, r2b)
+        #     GraphBlock(self.mainWin, r2b)
         #     for r2b in r2blocks]
         self.graphBlocks = [
-            GraphBlock(self.mainWin, self.graphItem, mb)
+            GraphBlock(self.mainWin, mb)
             for mb in MyBlock._makeFuncBlocks(self.mainWin.r2core, self.funcAddr)]
 
         self.graphBlocksByAddr = dict((b.addr, b) for b in self.graphBlocks)
 
-        tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'graph.html'))
-        html = tmpl.render(blocks=self.graphBlocks)
-        self.graphItem.setHtml(html)
-
-        self.addItem(self.graphItem)
-
-    def _makeBlockGraph(self):
         self.blockGraph = networkx.DiGraph()
         for b in self.graphBlocks:
-            r = b.rect()
-            self.blockGraph.add_node(b.addr,
-                # attributes for graphviz
-                # note that graphviz expects scaled input, so we scale it back
-                width=r.width() / self.GRAPHVIZ_SCALE_FACTOR,
-                height=r.height() / self.GRAPHVIZ_SCALE_FACTOR,
-                fixedsize='true')
+            self.blockGraph.add_node(b.addr)
 
             if b.fail is not None:
                 self.blockGraph.add_edge(b.addr, b.fail, type='fail')
@@ -578,6 +559,21 @@ class SonareGraphScene(QGraphicsScene):
             if b.jump is not None:
                 type_ = 'jump' if b.fail is None else 'ok'
                 self.blockGraph.add_edge(b.addr, b.jump, type=type_)
+
+    def _makeGraphItem(self):
+        self.graphItem = QGraphicsWebView()
+        self.graphItem.setResizesToContents(True)
+        self.graphItem.setPos(0, 0)
+        self.graphItem.setZValue(-1)    # put under edges
+
+        for block in self.graphBlocks:
+            block.graphItem = self.graphItem
+
+        tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'graph.html'))
+        html = tmpl.render(blocks=self.graphBlocks)
+        self.graphItem.setHtml(html)
+
+        self.addItem(self.graphItem)
 
     def _makeEdgeItemsFromGraph(self):
         self.edgeItems = {}
@@ -597,6 +593,16 @@ class SonareGraphScene(QGraphicsScene):
             self.edgeItems[b1Addr, b2Addr] = edgeItem
 
     def _layoutBlockGraph(self):
+        # set node sizes
+        for b in self.graphBlocks:
+            r = b.rect()
+
+            # note that graphviz expects scaled input, so we scale it back
+            nodeData = self.blockGraph.node[b.addr]
+            nodeData['width'] = r.width() / self.GRAPHVIZ_SCALE_FACTOR
+            nodeData['height'] = r.height() / self.GRAPHVIZ_SCALE_FACTOR
+            nodeData['fixedsize'] = 'true'
+
         # dot is for directed graphs
         layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
 
