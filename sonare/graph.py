@@ -516,7 +516,6 @@ class SonareGraphScene(QGraphicsScene):
         self.setBackgroundBrush(mainWin.WINDOW_COLOR)
 
         self.mainWin = mainWin
-        self.r2core = mainWin.r2core
 
         self.clear()
 
@@ -552,7 +551,7 @@ class SonareGraphScene(QGraphicsScene):
         #     for r2b in r2blocks]
         self.graphBlocks = [
             GraphBlock(self.mainWin, self.graphItem, mb)
-            for mb in MyBlock._makeFuncBlocks(self.r2core, self.funcAddr)]
+            for mb in MyBlock._makeFuncBlocks(self.mainWin.r2core, self.funcAddr)]
 
         self.graphBlocksByAddr = dict((b.addr, b) for b in self.graphBlocks)
 
