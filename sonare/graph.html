@@ -41,7 +41,7 @@ tr:hover            { background: #404054;
             style="display: table; position: absolute;">
         <div class="label">${b.labelName}:</div>
         <table>
-            % for (addr, asmOp) in b.asmOps:
+            % for (addr, asmOp) in b.myblock.asmOps:
             <tr>
             <td class="addr">${addr | n,fmtAddr}</td>
             <td class="hex">${asmOp.get_hex() | n,fmtHex}</td>

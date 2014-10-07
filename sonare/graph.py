@@ -305,7 +305,7 @@ class EdgeItem(QGraphicsPathItem):
 
 
 class MyBlock(object):
-    def __init__(self, ops, endOp):
+    def __init__(self, r2core, ops, endOp):
         '''(endOp causes the end of the block, but might not be the
             last op due to delay slots)'''
 
@@ -323,6 +323,24 @@ class MyBlock(object):
     @property
     def fail(self):
         return normalizeAddr(self.endOp.fail)
+
+    @property
+    def asmOps(self):
+        for op in self.ops:
+            addr = op.addr
+            asmOp = self.r2core.disassemble(addr)
+            assert asmOp is not None, \
+                "Couldn't disassemble @ {:#x}".format(addr)
+            yield (addr, asmOp)
+
+        # addr = self.r2block.addr
+        # endAddr = addr + self.r2block.size
+
+        # while addr < endAddr:
+        #     op = self.r2core.disassemble(addr)
+        #     yield (addr, op)
+
+        #     addr += op.size
 
     @staticmethod
     def _makeMyBlockAt(r2core, addr):
@@ -343,7 +361,7 @@ class MyBlock(object):
             if opsLeft > 0:
                 opsLeft -= 1
 
-        return MyBlock(ops, endOp)
+        return MyBlock(r2core, ops, endOp)
 
     @staticmethod
     def _makeFuncBlocks(r2core, funcAddr):
@@ -459,24 +477,6 @@ class GraphBlock(object):
     def addIncomingEdgeItem(self, edgeItem):
         self.incomingEdgeItems.append(edgeItem)
         self.resortEdgeItems()
-
-    @property
-    def asmOps(self):
-        for op in self.myblock.ops:
-            addr = op.addr
-            asmOp = self.mainWin.r2core.disassemble(addr)
-            assert asmOp is not None, \
-                "Couldn't disassemble @ {:#x}".format(addr)
-            yield (addr, asmOp)
-
-        # addr = self.r2block.addr
-        # endAddr = addr + self.r2block.size
-
-        # while addr < endAddr:
-        #     op = self.mainWin.r2core.disassemble(addr)
-        #     yield (addr, op)
-
-        #     addr += op.size
 
 
 # TODO: use a QWebView directly instead of QGraphicsScene
