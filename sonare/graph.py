@@ -544,6 +544,23 @@ class SonareGraphScene(QGraphicsScene):
         assert elemID[0] == 'b'
         return int(elemID[1:], 16)
 
+    def _parseCssSize(self, cssSize):
+        assert cssSize.endswith('px')
+        return float(cssSize[:-2])
+
+    def _getBlockRect(self, blockAddr):
+        elem = self.blockElements[blockAddr]
+
+        xStr = elem.styleProperty("left", QWebElement.ComputedStyle)
+        yStr = elem.styleProperty("top",  QWebElement.ComputedStyle)
+
+        x = self._parseCssSize(xStr)
+        y = self._parseCssSize(yStr)
+
+        r = elem.geometry()
+        r.translate(x, y)
+        return r
+
     def _makeGraphItem(self):
         self.graphItem = QGraphicsWebView()
         self.graphItem.setResizesToContents(True)
