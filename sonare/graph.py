@@ -309,6 +309,7 @@ class MyBlock(object):
         '''(endOp causes the end of the block, but might not be the
             last op due to delay slots)'''
 
+        self.r2core = r2core
         self.ops = ops
         self.endOp = endOp
 
@@ -341,6 +342,10 @@ class MyBlock(object):
         #     yield (addr, op)
 
         #     addr += op.size
+
+    @property
+    def labelName(self):
+        return 'blk_{0:x}'.format(self.addr)
 
     @staticmethod
     def _makeMyBlockAt(r2core, addr):
@@ -408,10 +413,6 @@ class GraphBlock(object):
     @property
     def fail(self):
         return normalizeAddr(self.myblock.fail)
-
-    @property
-    def labelName(self):
-        return 'blk_{0:x}'.format(self.addr)
 
     @property
     def x(self):
@@ -536,6 +537,13 @@ class SonareGraphScene(QGraphicsScene):
                 type_ = 'jump' if b.fail is None else 'ok'
                 self.blockGraph.add_edge(b.addr, b.jump, type=type_)
 
+    def _getBlockElementID(self, myblock):
+        return 'b{:08x}'.format(myblock.addr)
+
+    def _blockElementIDToAddr(self, elemID):
+        assert elemID[0] == 'b'
+        return int(elemID[1:], 16)
+
     def _makeGraphItem(self):
         self.graphItem = QGraphicsWebView()
         self.graphItem.setResizesToContents(True)
@@ -547,13 +555,19 @@ class SonareGraphScene(QGraphicsScene):
 
         tmpl = Template(filename=os.path.join(main.MAIN_DIR, 'graph.html'))
         html = tmpl.render(
-            blocks=self.graphBlocks,
+            blocks=[(self._getBlockElementID(gb.myblock), gb.myblock)
+                for gb in self.graphBlocks],
             fmtAddr=self._formatAddr,
             fmtHex=self._formatHex,
             fmtAsm=self._formatAsm)
         self.graphItem.setHtml(html)
 
         self.addItem(self.graphItem)
+
+        self.blockElements = dict(
+            (self._blockElementIDToAddr(blockElem.attribute('id')), blockElem)
+            for blockElem
+            in self.graphItem.page().mainFrame().findAllElements(".block"))
 
     def _formatAddr(self, addr):
         '''Format address nicely as HTML'''
@@ -589,21 +603,19 @@ class SonareGraphScene(QGraphicsScene):
 
             self.edgeItems[b1Addr, b2Addr] = edgeItem
 
-    def _layoutBlockGraph(self):
-        # set node sizes
-        for b in self.graphBlocks:
-            r = b.rect()
+    def _updateGraphNodeSizes(self):
+        for addr, elem in self.blockElements.iteritems():
+            r = elem.geometry()
 
             # note that graphviz expects scaled input, so we scale it back
-            nodeData = self.blockGraph.node[b.addr]
+            nodeData = self.blockGraph.node[addr]
             nodeData['width'] = r.width() / self.GRAPHVIZ_SCALE_FACTOR
             nodeData['height'] = r.height() / self.GRAPHVIZ_SCALE_FACTOR
             nodeData['fixedsize'] = 'true'
 
-        # dot is for directed graphs
-        layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
-
+    def _fixGraphvizLayout(self, layout):
         fixedLayout = {}
+
         for blockAddr, pos in layout.items():
             block = self.graphBlocksByAddr[blockAddr]
 
@@ -619,12 +631,26 @@ class SonareGraphScene(QGraphicsScene):
 
             fixedLayout[blockAddr] = (x, y)
 
-        # set position, but adjust so minimum (x,y) is at (0, 0)
+        # now adjust so minimum (x,y) is at (0, 0)
         minX = min(x for (x, _) in fixedLayout.itervalues())
         minY = min(y for (_, y) in fixedLayout.itervalues())
+        fixedLayout2 = dict(
+            (blockAddr, (x - minX, y - minY))
+            for (blockAddr, (x, y))
+            in fixedLayout.iteritems())
+
+        return fixedLayout2
+
+    def _layoutBlockGraph(self):
+        self._updateGraphNodeSizes()
+
+        # dot is for directed graphs
+        layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
+
+        layout = self._fixGraphvizLayout(layout)
+
         for graphBlock in self.graphBlocks:
-            x, y = fixedLayout[graphBlock.addr]
-            graphBlock.setPos(x - minX, y - minY)
+            graphBlock.setPos(*layout[graphBlock.addr])
 
         # now we moved the blocks around, resort the blocks' edge item lists
         for graphBlock in self.graphBlocks:

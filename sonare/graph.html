@@ -35,13 +35,13 @@ tr:hover            { background: #404054;
     </style>
 </head>
 <body>
-    % for b in blocks:
+    % for blkElemID, b in blocks:
     <!-- TODO: use ems for width -->
-    <div id="${b.elementID}" class="block"
+    <div id="${blkElemID}" class="block"
             style="display: table; position: absolute;">
         <div class="label">${b.labelName}:</div>
         <table>
-            % for (addr, asmOp) in b.myblock.asmOps:
+            % for (addr, asmOp) in b.asmOps:
             <tr>
             <td class="addr">${addr | n,fmtAddr}</td>
             <td class="hex">${asmOp.get_hex() | n,fmtHex}</td>
