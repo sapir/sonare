@@ -246,6 +246,13 @@ if __name__ == '__main__':
         raise SystemExit("Usage: {0} <binary file>".format(args[0]))
 
     path, = args[1:]
+
     window = SonareWindow(path)
+
+    try:
+        window.gotoFunc('main')
+    except ValueError:
+        pass
+
     window.showMaximized()
     app.exec_()
