@@ -515,6 +515,10 @@ class SonareGraphScene(QGraphicsScene):
         self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
 
+    @property
+    def blockAddrs(self):
+        return (b.addr for b in self.graphBlocks)
+
     def _makeBlockGraph(self):
         # r2blocks = self.func.get_bbs()
         # self.graphBlocks = [
@@ -669,13 +673,15 @@ class SonareGraphScene(QGraphicsScene):
         for graphBlock in self.graphBlocks:
             graphBlock.setPos(*layout[graphBlock.addr])
 
-        # now we moved the blocks around, resort the blocks' edge item lists
-        for graphBlock in self.graphBlocks:
-            graphBlock.resortEdgeItems()
+        self._layoutEdges()
 
-        # update edges according to block positions
-        for edge in self.edgeItems.itervalues():
-            edge.updatePos()
+        # # now we moved the blocks around, resort the blocks' edge item lists
+        # for graphBlock in self.graphBlocks:
+        #     graphBlock.resortEdgeItems()
+
+        # # update edges according to block positions
+        # for edge in self.edgeItems.itervalues():
+        #     edge.updatePos()
 
         # TODO: perhaps margins should be inside the graphItem
         r = reduce(QRect.united, (gb.rect() for gb in self.graphBlocks))
@@ -684,14 +690,19 @@ class SonareGraphScene(QGraphicsScene):
              self.HORIZ_MARGIN,  self.VERT_MARGIN)
         self.setSceneRect(r)
 
+    @staticmethod
+    def _intersectsLineWithLines(line, withLines):
+        for line2 in withLines:
+            intrType, _ = line.intersect(line2)
+            if intrType == QLineF.BoundedIntersection:
+                return True
+
+        return False
+
     def intersectLineWithBlocks(self, line):
         for graphBlock in self.graphBlocks:
             r = graphBlock.rect()
-
-            # convert rectangle to lines
-            rpts = [r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft(),
-                r.topLeft()]
-            rlines = pointListToLines(rpts)
+            rlines = rectLines(r)
 
             # test rectangle's lines against our line, yield any intersections
             for rline in rlines:
@@ -703,3 +714,72 @@ class SonareGraphScene(QGraphicsScene):
 
     def doesLineIntersectWithBlocks(self, line):
         return not isEmptyIterable(self.intersectLineWithBlocks(line))
+
+    def _layoutEdges(self):
+        CLEARANCE = 15
+
+        blockRectsByAddr = dict(
+            (addr, self._getBlockRect(addr))
+            for addr in self.blockAddrs)
+
+        blockRectsLines = [ln for r in blockRectsByAddr.itervalues()
+            for ln in rectLines(r)]
+
+        endPoints = []
+        for b1Addr, b2Addr in self.blockGraph.edges_iter():
+            b1Rect = blockRectsByAddr[b1Addr]
+            b2Rect = blockRectsByAddr[b2Addr]
+            endPoints.append(
+                (b1Addr, b2Addr,
+                 (b1Rect.center().x(), b1Rect.bottom() + CLEARANCE),
+                 (b2Rect.center().x(), b2Rect.top() - CLEARANCE)))
+
+        G = networkx.DiGraph()
+
+        xs = set()
+        ys = set()
+        for r in blockRectsByAddr.itervalues():
+            xs.add(r.left() - CLEARANCE)
+            xs.add(r.right() + CLEARANCE)
+            ys.add(r.top() - CLEARANCE)
+            ys.add(r.bottom() + CLEARANCE)
+            # r.adjust(-CLEARANCE, -CLEARANCE, CLEARANCE, CLEARANCE)
+            # for p in rectCorners(r):
+            #     G.add_node((p.x(), p.y()))
+
+        for _, _, p1, p2 in endPoints:
+            for p in [p1, p2]:
+                xs.add(p[0])
+                ys.add(p[1])
+            # G.add_node(p1)
+            # G.add_node(p2)
+
+        G.add_nodes_from((x,y) for x in xs for y in ys)
+
+        for p1 in G.nodes():
+            for p2 in G.nodes():
+                line = QLineF(*(p1 + p2))
+                if not self._intersectsLineWithLines(line, blockRectsLines):
+                    # print('adding edge', p1, p2, line.length())
+                    G.add_edge(p1, p2, weight=line.length())
+
+        shortestPaths = networkx.shortest_path(G, weight='weight')
+
+        for b1Addr, b2Addr, p1, p2 in endPoints:
+            p1x, p1y = p1
+            p2x, p2y = p2
+
+            path = shortestPaths[p1][p2]
+            path.insert(0, (p1x, p1y - CLEARANCE))
+            path.append((p2x, p2y + CLEARANCE))
+
+            edgeItem = self.edgeItems[b1Addr, b2Addr]
+
+            ppath = QPainterPath()
+            ppath.moveTo(*path[0])
+            for pt in path[1:]:
+                ppath.lineTo(*pt)
+            edgeItem.setPath(ppath)
+
+            edgeItem._updateArrowPos()
+            edgeItem._updatePen()
