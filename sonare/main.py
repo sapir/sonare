@@ -192,7 +192,7 @@ class SonareWindow(QMainWindow):
         self.gotoAddr(funcAddr)
 
     def gotoAddr(self, funcAddr):
-        func = self.r2core.anal.get_fcn_at(funcAddr)
+        func = self.r2core.anal.get_fcn_at(funcAddr, 1) # R_ANAL_FCN_TYPE_FCN
         if func is None:
             self.funcName = '?'
         else:
