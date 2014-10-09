@@ -717,6 +717,16 @@ class SonareGraphScene(QGraphicsScene):
     def doesLineIntersectWithBlocks(self, line):
         return not isEmptyIterable(self.intersectLineWithBlocks(line))
 
+    @staticmethod
+    def _intersectsHorizLineWithRect(x1, x2, y, rect):
+        return (x1 < rect.right() and x2 > rect.left()
+            and rect.top() < y < rect.bottom())
+
+    @staticmethod
+    def _intersectsVertLineWithRect(x, y1, y2, rect):
+        return (y1 < rect.bottom() and y2 > rect.top()
+            and rect.left() < x < rect.right())
+
     def _layoutEdges(self):
         CLEARANCE = 15
         NUM_RECT_OUTLINES = 2
@@ -725,8 +735,7 @@ class SonareGraphScene(QGraphicsScene):
             (addr, self._getBlockRect(addr))
             for addr in self.blockAddrs)
 
-        blockRectsLines = [ln for r in blockRectsByAddr.itervalues()
-            for ln in rectLines(r)]
+        blockRects = blockRectsByAddr.values()
 
         blockOutEdgesByDstX = dict(
             (addr, sorted(self.blockGraph.successors(addr),
@@ -760,7 +769,7 @@ class SonareGraphScene(QGraphicsScene):
 
         xs = set()
         ys = set()
-        for r in blockRectsByAddr.itervalues():
+        for r in blockRects:
             for i in xrange(1, NUM_RECT_OUTLINES + 1):
                 xs.add(r.left() - CLEARANCE * i)
                 xs.add(r.right() + CLEARANCE * i)
@@ -777,16 +786,28 @@ class SonareGraphScene(QGraphicsScene):
         sortedYs = sorted(ys)
         adjacentXs = zip(sortedXs, sortedXs[1:])
         adjacentYs = zip(sortedYs, sortedYs[1:])
-        straightEdges = itertools.chain(
-            (((x1, y), (x2, y)) for y in ys for (x1, x2) in adjacentXs),
-            (((x, y1), (x, y2)) for x in xs for (y1, y2) in adjacentYs))
 
-        # TODO: there should be an easier way to check intersection between
-            # straight edges and rectangles
-        for p1, p2 in straightEdges:
-            line = QLineF(*(p1 + p2))
-            if not self._intersectsLineWithLines(line, blockRectsLines):
-                G.add_edge(p1, p2, weight=line.length())
+        for (x1, x2) in adjacentXs:
+            for y in ys:
+                if not any(
+                    self._intersectsHorizLineWithRect(x1, x2, y, r)
+                    for r in blockRects):
+
+                    p1 = (x1, y)
+                    p2 = (x2, y)
+                    dist = x2 - x1
+                    G.add_edge(p1, p2, weight=dist)
+
+        for (y1, y2) in adjacentYs:
+            for x in xs:
+                if not any(
+                    self._intersectsVertLineWithRect(x, y1, y2, r)
+                    for r in blockRects):
+
+                    p1 = (x, y1)
+                    p2 = (x, y2)
+                    dist = y2 - y1
+                    G.add_edge(p1, p2, weight=dist)
 
         for b1Addr, b2Addr, p1, p2 in endPoints:
             p1x, p1y = p1
