@@ -817,6 +817,12 @@ class SonareGraphScene(QGraphicsScene):
                     dist = y2 - y1
                     G.add_edge(p1, p2, weight=dist)
 
+        # sort endpoints by Y values. the idea is that the straight flow's edges
+        # will be handled first and will get nicer edges, though we probably
+        # won't be doing exactly the right thing here.
+        endPoints.sort(
+            key=lambda (b1a,b2a,(x1,y1),(x2,y2)): (y1, y2 >= y1, abs(y2 - y1)))
+
         for b1Addr, b2Addr, p1, p2 in endPoints:
             p1x, p1y = p1
             p2x, p2y = p2
