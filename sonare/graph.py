@@ -276,6 +276,215 @@ class MyBlock(object):
                 todo.add(mb.fail)
 
 
+class _BlockLayoutInfo(object):
+    """
+    Temporary object describing info about a graph block, used for edge layout.
+    """
+
+
+    "Horizontal spacing between incoming/outgoing edge arrows"
+    EDGE_SPACING = 15
+
+
+    def __init__(self, blockAddr, rect, blockGraph, blockRectsByAddr):
+        self.addr = blockAddr
+        self.rect = rect
+        self.centerX = self.rect.center().x()
+
+        centerXOfBlock = lambda blockAddr: blockRectsByAddr[blockAddr].center().x()
+
+        # destinations of outgoing edges, sorted by X position of dest block.
+        self.sortedSuccessors = sorted(
+            blockGraph.successors(self.addr), key=centerXOfBlock)
+
+        # sources of incoming edges, sorted by Y position of source block.
+        self.sortedPredecessors = sorted(
+            blockGraph.predecessors(self.addr), key=centerXOfBlock)
+
+    def _getEdgeXPos(self, otherBlockList, otherBlockAddr):
+        edgeAreaWidth = (len(otherBlockList) - 1) * self.EDGE_SPACING
+        edgeIdx = otherBlockList.index(otherBlockAddr)
+        return self.centerX - edgeAreaWidth / 2. + edgeIdx * self.EDGE_SPACING
+
+    def getOutgoingEdgePos(self, otherBlockAddr):
+        return self._getEdgeXPos(self.sortedSuccessors, otherBlockAddr)
+
+    def getIncomingEdgePos(self, otherBlockAddr):
+        return self._getEdgeXPos(self.sortedPredecessors, otherBlockAddr)
+
+class _EdgeLayoutInfo(object):
+    """
+    Temporary object describing info about a graph block, used for edge layout.
+    """
+
+    def __init__(self, b1Addr, b2Addr, blockLayoutInfosByAddr):
+        self.b1Addr = b1Addr
+        self.b2Addr = b2Addr
+
+        self.bli1 = blockLayoutInfosByAddr[self.b1Addr]
+        self.bli2 = blockLayoutInfosByAddr[self.b2Addr]
+
+        self.x1 = self.bli1.getOutgoingEdgePos(b2Addr)
+        self.y0 = self.bli1.rect.bottom()
+        self.y1 = self.y0 + _EdgeLayoutAlgo.CLEARANCE
+
+        self.x2 = self.bli2.getIncomingEdgePos(b1Addr)
+        self.y3 = self.bli2.rect.top()
+        self.y2 = self.y3 - _EdgeLayoutAlgo.CLEARANCE
+
+    @property
+    def p1(self):
+        return (self.x1, self.y1)
+
+    @property
+    def p2(self):
+        return (self.x2, self.y2)
+
+class _EdgeLayoutAlgo(object):
+    """
+    Implementation of edge layout algorithm. (In a separate object
+    because it has some state.)
+    """
+
+
+    NUM_RECT_OUTLINES = 3
+    OUTLINE_SPACING = 10
+    CLEARANCE = 15
+
+
+    def __init__(self, blocksAndRects, blockGraph):
+        self.blockAddrs = [blockAddr for (blockAddr, _) in blocksAndRects]
+        self.blockRects = [rect for (_, rect) in blocksAndRects]
+        self.blockRectsByAddr = dict(blocksAndRects)
+
+        self.blockGraph = blockGraph
+
+        self._makeLayoutInfos()
+
+    def _makeLayoutInfos(self):
+        self.blockLayoutInfos = [
+            _BlockLayoutInfo(addr, self.blockRectsByAddr[addr],
+                self.blockGraph, self.blockRectsByAddr)
+            for addr in self.blockAddrs]
+
+        self.blockLayoutInfosByAddr = dict(
+            (bli.addr, bli) for bli in self.blockLayoutInfos)
+
+        self.edgeLayoutInfos = [
+            _EdgeLayoutInfo(b1Addr, b2Addr, self.blockLayoutInfosByAddr)
+            for (b1Addr, b2Addr) in self.blockGraph.edges_iter()]
+
+    def doLayout(self):
+        self._makeGridGraph()
+        return self._makeEdgePaths()
+
+    def _makeGridGraph(self):
+        # make a grid graph, with X and Y values of lines around rectangles
+        # and of edge endpoints. exclude lines that intersect rectangles.
+
+        self._graph = networkx.Graph()
+
+        xs = set()
+        ys = set()
+
+        for r in self.blockRects:
+            for i in xrange(self.NUM_RECT_OUTLINES):
+                outlineMargin = self.CLEARANCE + i * self.OUTLINE_SPACING
+                xs.add(r.left() - outlineMargin)
+                xs.add(r.right() + outlineMargin)
+                ys.add(r.top() - outlineMargin)
+                ys.add(r.bottom() + outlineMargin)
+
+        for eli in self.edgeLayoutInfos:
+            for p in [eli.p1, eli.p2]:
+                x, y = p
+                xs.add(x)
+                ys.add(y)
+
+        # we use larger rects for intersecting with edges, so other edges won't
+        # get in the way of the edge arrows in the area around the rects
+        expandedBlockRects = [
+            r.adjusted(
+                -self.CLEARANCE, -self.CLEARANCE,
+                 self.CLEARANCE,  self.CLEARANCE)
+            for r in self.blockRects]
+
+        sortedXs = sorted(xs)
+        adjacentXs = zip(sortedXs, sortedXs[1:])
+        for (x1, x2) in adjacentXs:
+            for y in ys:
+                if not any(
+                    self._collideHorizLineAndRect(x1, x2, y, r)
+                    for r in expandedBlockRects):
+
+                    p1 = (x1, y)
+                    p2 = (x2, y)
+                    dist = x2 - x1
+                    self._graph.add_edge(p1, p2, weight=dist)
+
+        sortedYs = sorted(ys)
+        adjacentYs = zip(sortedYs, sortedYs[1:])
+        for (y1, y2) in adjacentYs:
+            for x in xs:
+                if not any(
+                    self._collideVertLineAndRect(x, y1, y2, r)
+                    for r in expandedBlockRects):
+
+                    p1 = (x, y1)
+                    p2 = (x, y2)
+                    dist = y2 - y1
+                    self._graph.add_edge(p1, p2, weight=dist)
+
+    def _makeEdgePaths(self):
+        """Make edgePaths dict. (Also removes used edges from _graph.)"""
+
+        # sort edges by Y values. the idea is that the straight flow's edges
+        # will be handled first and will get nicer edges, though we probably
+        # won't be doing exactly the right thing here.
+        self.edgeLayoutInfos.sort(
+            key=lambda eli: (eli.y1, eli.y2 >= eli.y1, abs(eli.y2 - eli.y1)))
+
+        edgePaths = {}
+        for eli in self.edgeLayoutInfos:
+            try:
+                path = networkx.shortest_path(
+                    self._graph, eli.p1, eli.p2, weight='weight')
+
+                # don't use these edges for any other paths
+                for p1, p2 in zip(path, path[1:]):
+                    self._graph.remove_edge(p1, p2)
+            except networkx.NetworkXNoPath:
+                print('no path! between', p1, p2, file=sys.stderr)
+                # create direct edge for debugging
+                path = [p1, p2]
+
+            # Force vertical beginning and end of edges.
+            path.insert(0, (eli.x1, eli.y0))
+            path.append((eli.x2, eli.y3))
+
+            edgePaths[eli.b1Addr, eli.b2Addr] = path
+
+        return edgePaths
+
+    @staticmethod
+    def _collideHorizLineAndRect(x1, x2, y, rect):
+        """
+        Check for collision between a horizontal line and a QRect.
+        (doesn't include the QRect's edges).
+        """
+        return (x1 < rect.right() and x2 > rect.left()
+            and rect.top() < y < rect.bottom())
+
+    @staticmethod
+    def _collideVertLineAndRect(x, y1, y2, rect):
+        """
+        Check for collision between a vertical line and a QRect.
+        (doesn't include the QRect's edges).
+        """
+        return (y1 < rect.bottom() and y2 > rect.top()
+            and rect.left() < x < rect.right())
+
+
 # TODO: use a QWebView directly instead of QGraphicsScene
 class SonareGraphScene(QGraphicsScene):
     GRAPHVIZ_SCALE_FACTOR = 72.
@@ -479,127 +688,13 @@ class SonareGraphScene(QGraphicsScene):
              self.HORIZ_MARGIN,  self.VERT_MARGIN)
         self.setSceneRect(r)
 
-    @staticmethod
-    def _intersectsHorizLineWithRect(x1, x2, y, rect):
-        return (x1 < rect.right() and x2 > rect.left()
-            and rect.top() < y < rect.bottom())
-
-    @staticmethod
-    def _intersectsVertLineWithRect(x, y1, y2, rect):
-        return (y1 < rect.bottom() and y2 > rect.top()
-            and rect.left() < x < rect.right())
-
     def _layoutEdges(self):
-        CLEARANCE = 15
-        NUM_RECT_OUTLINES = 3
-        OUTLINE_SPACING = 10
+        blocksAndRects = [
+            (blockAddr, self.getBlockRect(blockAddr))
+            for blockAddr in self.blockAddrs]
 
-        blockRectsByAddr = dict(
-            (addr, self.getBlockRect(addr))
-            for addr in self.blockAddrs)
+        layoutAlgo = _EdgeLayoutAlgo(blocksAndRects, self.blockGraph)
+        edgePaths = layoutAlgo.doLayout()
 
-        blockRects = blockRectsByAddr.values()
-
-        blockOutEdgesByDstX = dict(
-            (addr, sorted(self.blockGraph.successors(addr),
-                    key=lambda dstAddr: blockRectsByAddr[dstAddr].center().x()))
-            for addr in self.blockAddrs)
-
-        blockInEdgesBySrcX = dict(
-            (addr, sorted(self.blockGraph.predecessors(addr),
-                    key=lambda srcAddr: blockRectsByAddr[srcAddr].center().x()))
-            for addr in self.blockAddrs)
-
-        endPoints = []
-        for b1Addr, b2Addr in self.blockGraph.edges_iter():
-            b1Rect = blockRectsByAddr[b1Addr]
-            b2Rect = blockRectsByAddr[b2Addr]
-
-            b1OutList = blockOutEdgesByDstX[b1Addr]
-            b1EdgeAreaWidth = (len(b1OutList) - 1) * CLEARANCE
-            b1Ofs = -b1EdgeAreaWidth / 2. + b1OutList.index(b2Addr) * CLEARANCE
-
-            b2InList = blockInEdgesBySrcX[b2Addr]
-            b2EdgeAreaWidth = (len(b2InList) - 1) * CLEARANCE
-            b2Ofs = -b2EdgeAreaWidth / 2. + b2InList.index(b1Addr) * CLEARANCE
-
-            endPoints.append(
-                (b1Addr, b2Addr,
-                 (b1Rect.center().x() + b1Ofs, b1Rect.bottom() + CLEARANCE),
-                 (b2Rect.center().x() + b2Ofs, b2Rect.top() - CLEARANCE)))
-
-        G = networkx.Graph()
-
-        xs = set()
-        ys = set()
-        for r in blockRects:
-            for i in xrange(NUM_RECT_OUTLINES):
-                outlineMargin = CLEARANCE + i * OUTLINE_SPACING
-                xs.add(r.left() - outlineMargin)
-                xs.add(r.right() + outlineMargin)
-                ys.add(r.top() - outlineMargin)
-                ys.add(r.bottom() + outlineMargin)
-
-        for _, _, p1, p2 in endPoints:
-            for p in [p1, p2]:
-                x, y = p
-                xs.add(x)
-                ys.add(y)
-
-        # we use larger rects for intersecting with edges, so other edges won't
-        # get in the way of the edge arrows in the area around the rects
-        expandedBlockRects = [
-            r.adjusted(-CLEARANCE, -CLEARANCE, CLEARANCE, CLEARANCE)
-            for r in blockRects]
-
-        sortedXs = sorted(xs)
-        adjacentXs = zip(sortedXs, sortedXs[1:])
-        for (x1, x2) in adjacentXs:
-            for y in ys:
-                if not any(
-                    self._intersectsHorizLineWithRect(x1, x2, y, r)
-                    for r in expandedBlockRects):
-
-                    p1 = (x1, y)
-                    p2 = (x2, y)
-                    dist = x2 - x1
-                    G.add_edge(p1, p2, weight=dist)
-
-        sortedYs = sorted(ys)
-        adjacentYs = zip(sortedYs, sortedYs[1:])
-        for (y1, y2) in adjacentYs:
-            for x in xs:
-                if not any(
-                    self._intersectsVertLineWithRect(x, y1, y2, r)
-                    for r in expandedBlockRects):
-
-                    p1 = (x, y1)
-                    p2 = (x, y2)
-                    dist = y2 - y1
-                    G.add_edge(p1, p2, weight=dist)
-
-        # sort endpoints by Y values. the idea is that the straight flow's edges
-        # will be handled first and will get nicer edges, though we probably
-        # won't be doing exactly the right thing here.
-        endPoints.sort(
-            key=lambda (b1a,b2a,(x1,y1),(x2,y2)): (y1, y2 >= y1, abs(y2 - y1)))
-
-        for b1Addr, b2Addr, p1, p2 in endPoints:
-            p1x, p1y = p1
-            p2x, p2y = p2
-
-            try:
-                path = networkx.shortest_path(G, p1, p2, weight='weight')
-
-                # don't use these edges for any other paths
-                for q1, q2 in zip(path, path[1:]):
-                    G.remove_edge(q1, q2)
-            except networkx.NetworkXNoPath:
-                print('no path! between', p1, p2, file=sys.stderr)
-                # create direct edge for debugging
-                path = [p1, p2]
-
-            path.insert(0, (p1x, p1y - CLEARANCE))
-            path.append((p2x, p2y + CLEARANCE))
-
-            self.edgeItems[b1Addr, b2Addr].setEdgePath(path)
+        for (b1Addr, b2Addr), edgeItem in self.edgeItems.iteritems():
+            edgeItem.setEdgePath(edgePaths[b1Addr, b2Addr])
