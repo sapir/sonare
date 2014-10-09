@@ -729,7 +729,8 @@ class SonareGraphScene(QGraphicsScene):
 
     def _layoutEdges(self):
         CLEARANCE = 15
-        NUM_RECT_OUTLINES = 2
+        NUM_RECT_OUTLINES = 3
+        OUTLINE_SPACING = 10
 
         blockRectsByAddr = dict(
             (addr, self._getBlockRect(addr))
@@ -770,11 +771,12 @@ class SonareGraphScene(QGraphicsScene):
         xs = set()
         ys = set()
         for r in blockRects:
-            for i in xrange(1, NUM_RECT_OUTLINES + 1):
-                xs.add(r.left() - CLEARANCE * i)
-                xs.add(r.right() + CLEARANCE * i)
-                ys.add(r.top() - CLEARANCE * i)
-                ys.add(r.bottom() + CLEARANCE * i)
+            for i in xrange(NUM_RECT_OUTLINES):
+                outlineMargin = CLEARANCE + i * OUTLINE_SPACING
+                xs.add(r.left() - outlineMargin)
+                xs.add(r.right() + outlineMargin)
+                ys.add(r.top() - outlineMargin)
+                ys.add(r.bottom() + outlineMargin)
 
         for _, _, p1, p2 in endPoints:
             for p in [p1, p2]:
@@ -787,11 +789,17 @@ class SonareGraphScene(QGraphicsScene):
         adjacentXs = zip(sortedXs, sortedXs[1:])
         adjacentYs = zip(sortedYs, sortedYs[1:])
 
+        # we use larger rects for intersecting with edges, so other edges won't
+        # get in the way of the edge arrows in the area around the rects
+        expandedBlockRects = [
+            r.adjusted(-CLEARANCE, -CLEARANCE, CLEARANCE, CLEARANCE)
+            for r in blockRects]
+
         for (x1, x2) in adjacentXs:
             for y in ys:
                 if not any(
                     self._intersectsHorizLineWithRect(x1, x2, y, r)
-                    for r in blockRects):
+                    for r in expandedBlockRects):
 
                     p1 = (x1, y)
                     p2 = (x2, y)
@@ -802,7 +810,7 @@ class SonareGraphScene(QGraphicsScene):
             for x in xs:
                 if not any(
                     self._intersectsVertLineWithRect(x, y1, y2, r)
-                    for r in blockRects):
+                    for r in expandedBlockRects):
 
                     p1 = (x, y1)
                     p2 = (x, y2)
