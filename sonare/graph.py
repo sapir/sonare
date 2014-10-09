@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 import os
 import networkx
+import itertools
 from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
 from HTMLParser import HTMLParser
@@ -684,6 +685,7 @@ class SonareGraphScene(QGraphicsScene):
         #     edge.updatePos()
 
         # TODO: perhaps margins should be inside the graphItem
+        # TODO: include edges, too
         r = reduce(QRect.united, (gb.rect() for gb in self.graphBlocks))
         r.adjust(
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
@@ -717,6 +719,7 @@ class SonareGraphScene(QGraphicsScene):
 
     def _layoutEdges(self):
         CLEARANCE = 15
+        NUM_RECT_OUTLINES = 2
 
         blockRectsByAddr = dict(
             (addr, self._getBlockRect(addr))
@@ -725,51 +728,81 @@ class SonareGraphScene(QGraphicsScene):
         blockRectsLines = [ln for r in blockRectsByAddr.itervalues()
             for ln in rectLines(r)]
 
+        blockOutEdgesByDstX = dict(
+            (addr, sorted(self.blockGraph.successors(addr),
+                    key=lambda dstAddr: blockRectsByAddr[dstAddr].center().x()))
+            for addr in self.blockAddrs)
+
+        blockInEdgesBySrcX = dict(
+            (addr, sorted(self.blockGraph.predecessors(addr),
+                    key=lambda srcAddr: blockRectsByAddr[srcAddr].center().x()))
+            for addr in self.blockAddrs)
+
         endPoints = []
         for b1Addr, b2Addr in self.blockGraph.edges_iter():
             b1Rect = blockRectsByAddr[b1Addr]
             b2Rect = blockRectsByAddr[b2Addr]
+
+            b1OutList = blockOutEdgesByDstX[b1Addr]
+            b1EdgeAreaWidth = (len(b1OutList) - 1) * CLEARANCE
+            b1Ofs = -b1EdgeAreaWidth / 2. + b1OutList.index(b2Addr) * CLEARANCE
+
+            b2InList = blockInEdgesBySrcX[b2Addr]
+            b2EdgeAreaWidth = (len(b2InList) - 1) * CLEARANCE
+            b2Ofs = -b2EdgeAreaWidth / 2. + b2InList.index(b1Addr) * CLEARANCE
+
             endPoints.append(
                 (b1Addr, b2Addr,
-                 (b1Rect.center().x(), b1Rect.bottom() + CLEARANCE),
-                 (b2Rect.center().x(), b2Rect.top() - CLEARANCE)))
+                 (b1Rect.center().x() + b1Ofs, b1Rect.bottom() + CLEARANCE),
+                 (b2Rect.center().x() + b2Ofs, b2Rect.top() - CLEARANCE)))
 
-        G = networkx.DiGraph()
+        G = networkx.Graph()
 
         xs = set()
         ys = set()
         for r in blockRectsByAddr.itervalues():
-            xs.add(r.left() - CLEARANCE)
-            xs.add(r.right() + CLEARANCE)
-            ys.add(r.top() - CLEARANCE)
-            ys.add(r.bottom() + CLEARANCE)
-            # r.adjust(-CLEARANCE, -CLEARANCE, CLEARANCE, CLEARANCE)
-            # for p in rectCorners(r):
-            #     G.add_node((p.x(), p.y()))
+            for i in xrange(1, NUM_RECT_OUTLINES + 1):
+                xs.add(r.left() - CLEARANCE * i)
+                xs.add(r.right() + CLEARANCE * i)
+                ys.add(r.top() - CLEARANCE * i)
+                ys.add(r.bottom() + CLEARANCE * i)
 
         for _, _, p1, p2 in endPoints:
             for p in [p1, p2]:
-                xs.add(p[0])
-                ys.add(p[1])
-            # G.add_node(p1)
-            # G.add_node(p2)
+                x, y = p
+                xs.add(x)
+                ys.add(y)
 
-        G.add_nodes_from((x,y) for x in xs for y in ys)
+        sortedXs = sorted(xs)
+        sortedYs = sorted(ys)
+        adjacentXs = zip(sortedXs, sortedXs[1:])
+        adjacentYs = zip(sortedYs, sortedYs[1:])
+        straightEdges = itertools.chain(
+            (((x1, y), (x2, y)) for y in ys for (x1, x2) in adjacentXs),
+            (((x, y1), (x, y2)) for x in xs for (y1, y2) in adjacentYs))
 
-        for p1 in G.nodes():
-            for p2 in G.nodes():
-                line = QLineF(*(p1 + p2))
-                if not self._intersectsLineWithLines(line, blockRectsLines):
-                    # print('adding edge', p1, p2, line.length())
-                    G.add_edge(p1, p2, weight=line.length())
-
-        shortestPaths = networkx.shortest_path(G, weight='weight')
+        # TODO: there should be an easier way to check intersection between
+            # straight edges and rectangles
+        for p1, p2 in straightEdges:
+            line = QLineF(*(p1 + p2))
+            if not self._intersectsLineWithLines(line, blockRectsLines):
+                G.add_edge(p1, p2, weight=line.length())
 
         for b1Addr, b2Addr, p1, p2 in endPoints:
             p1x, p1y = p1
             p2x, p2y = p2
 
-            path = shortestPaths[p1][p2]
+            try:
+                path = networkx.shortest_path(G, p1, p2, weight='weight')
+
+                # don't use these edges for any other paths
+                for q1, q2 in zip(path, path[1:]):
+                    G.remove_edge(q1, q2)
+            except networkx.NetworkXNoPath:
+                print('no path! between', p1, p2, file=sys.stderr)
+                # create direct edge for debugging
+                path = [p1, p2]
+
             path.insert(0, (p1x, p1y - CLEARANCE))
             path.append((p2x, p2y + CLEARANCE))
 
