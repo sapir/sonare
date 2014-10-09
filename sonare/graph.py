@@ -348,11 +348,11 @@ class SonareGraphScene(QGraphicsScene):
             "Don't know how to parse {0!q}".format(cssSize)
         return float(cssSize[:-2])
 
-    def _getBlockSize(self, blockAddr):
+    def getBlockSize(self, blockAddr):
         elem = self.blockElements[blockAddr]
         return elem.geometry().size()
 
-    def _getBlockRect(self, blockAddr):
+    def getBlockRect(self, blockAddr):
         elem = self.blockElements[blockAddr]
 
         xStr = elem.styleProperty("left", QWebElement.ComputedStyle)
@@ -364,7 +364,7 @@ class SonareGraphScene(QGraphicsScene):
         # getBlockSize uses geometry() which doesn't actually offset the
         # rect it returns by (left, top), which is why we have to do it
         # ourselves
-        return QRect(QPoint(x, y), self._getBlockSize(blockAddr))
+        return QRect(QPoint(x, y), self.getBlockSize(blockAddr))
 
     def _setBlockPos(self, blockAddr, pos):
         x, y = pos
@@ -441,7 +441,7 @@ class SonareGraphScene(QGraphicsScene):
 
             # graphviz gives us center position for node, but we need the
             # top-left
-            r = self._getBlockSize(blockAddr)
+            r = self.getBlockSize(blockAddr)
             x -= r.width() / 2.
             y -= r.height() / 2.
 
@@ -473,7 +473,7 @@ class SonareGraphScene(QGraphicsScene):
         # TODO: perhaps margins should be inside the graphItem
         # TODO: include edges, too
         r = reduce(QRect.united,
-            (self._getBlockRect(blockAddr) for blockAddr in self.blockAddrs))
+            (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs))
         r.adjust(
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
              self.HORIZ_MARGIN,  self.VERT_MARGIN)
@@ -495,7 +495,7 @@ class SonareGraphScene(QGraphicsScene):
         OUTLINE_SPACING = 10
 
         blockRectsByAddr = dict(
-            (addr, self._getBlockRect(addr))
+            (addr, self.getBlockRect(addr))
             for addr in self.blockAddrs)
 
         blockRects = blockRectsByAddr.values()
