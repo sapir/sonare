@@ -214,8 +214,8 @@ class SonareWindow(QMainWindow):
 
         self.scene.loadFunc(funcAddr)
 
-        firstGraphBlock = self.scene.graphBlocks[0]
-        r = firstGraphBlock.rect()
+        firstBlock = self.scene.myBlocks[0]
+        r = self.scene._getBlockRect(firstBlock.addr)
         self.view.centerOn(r.center().x(), r.top())
 
         self._updateWindowTitle()
