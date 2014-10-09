@@ -546,17 +546,14 @@ class SonareGraphScene(QGraphicsScene):
                 xs.add(x)
                 ys.add(y)
 
-        sortedXs = sorted(xs)
-        sortedYs = sorted(ys)
-        adjacentXs = zip(sortedXs, sortedXs[1:])
-        adjacentYs = zip(sortedYs, sortedYs[1:])
-
         # we use larger rects for intersecting with edges, so other edges won't
         # get in the way of the edge arrows in the area around the rects
         expandedBlockRects = [
             r.adjusted(-CLEARANCE, -CLEARANCE, CLEARANCE, CLEARANCE)
             for r in blockRects]
 
+        sortedXs = sorted(xs)
+        adjacentXs = zip(sortedXs, sortedXs[1:])
         for (x1, x2) in adjacentXs:
             for y in ys:
                 if not any(
@@ -568,6 +565,8 @@ class SonareGraphScene(QGraphicsScene):
                     dist = x2 - x1
                     G.add_edge(p1, p2, weight=dist)
 
+        sortedYs = sorted(ys)
+        adjacentYs = zip(sortedYs, sortedYs[1:])
         for (y1, y2) in adjacentYs:
             for x in xs:
                 if not any(
