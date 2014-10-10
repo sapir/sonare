@@ -330,8 +330,20 @@ class _EdgeLayoutAlgo(object):
     ANGLE_PENALTY = 100
 
 
-    def __init__(self, blocksAndRects, blockGraph):
-        self.blockAddrs = [blockAddr for (blockAddr, _) in blocksAndRects]
+    def __init__(self, blockGraph):
+        """
+        blockGraph should contain x, y, width and height attributes for
+        each node.
+        """
+
+        self.blockAddrs = blockGraph.nodes()
+
+        blocksAndRects = [
+            (blockAddr,
+                QRect(data['x'], data['y'], data['width'], data['height']))
+            for (blockAddr, data)
+            in blockGraph.nodes_iter(data=True)]
+
         self.blockRects = [rect for (_, rect) in blocksAndRects]
         self.blockRectsByAddr = dict(blocksAndRects)
 
@@ -646,6 +658,10 @@ class SonareGraphScene(QGraphicsScene):
         elem.setStyleProperty("left", "{:.2f}px".format(x))
         elem.setStyleProperty("top",  "{:.2f}px".format(y))
 
+        nodeData = self.blockGraph.node[blockAddr]
+        nodeData['x'] = x
+        nodeData['y'] = y
+
     def _makeGraphItem(self):
         self.graphItem = QGraphicsWebView()
         self.graphItem.setResizesToContents(True)
@@ -696,14 +712,13 @@ class SonareGraphScene(QGraphicsScene):
 
             self.addItem(edgeItem)
 
-    def _updateGraphNodeSizes(self):
+    def _setGraphNodeSizes(self, scalingFactor):
         for addr, elem in self.blockElements.iteritems():
             r = elem.geometry()
 
-            # note that graphviz expects scaled input, so we scale it back
             nodeData = self.blockGraph.node[addr]
-            nodeData['width'] = r.width() / self.GRAPHVIZ_SCALE_FACTOR
-            nodeData['height'] = r.height() / self.GRAPHVIZ_SCALE_FACTOR
+            nodeData['width'] = r.width() * scalingFactor
+            nodeData['height'] = r.height() * scalingFactor
             nodeData['fixedsize'] = 'true'
 
     def _fixGraphvizLayout(self, layout):
@@ -733,7 +748,8 @@ class SonareGraphScene(QGraphicsScene):
         return fixedLayout2
 
     def _layoutBlockGraph(self):
-        self._updateGraphNodeSizes()
+        # note that graphviz expects sizes in inches, so we scale them back
+        self._setGraphNodeSizes(1. / self.GRAPHVIZ_SCALE_FACTOR)
 
         # dot is for directed graphs
         layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
@@ -741,22 +757,20 @@ class SonareGraphScene(QGraphicsScene):
         layout = self._fixGraphvizLayout(layout)
 
         for blockAddr in self.blockAddrs:
+            # this both updates the HTML element, and the graph node's
+            # x and y attributes
             self._setBlockPos(blockAddr, layout[blockAddr])
 
-        self._layoutEdges()
+        # now set node sizes for edge layout algo
+        self._setGraphNodeSizes(scalingFactor=1.0)
 
-        self._updateSceneRect()
-
-    def _layoutEdges(self):
-        blocksAndRects = [
-            (blockAddr, self.getBlockRect(blockAddr))
-            for blockAddr in self.blockAddrs]
-
-        layoutAlgo = _EdgeLayoutAlgo(blocksAndRects, self.blockGraph)
+        layoutAlgo = _EdgeLayoutAlgo(self.blockGraph)
         edgePaths = layoutAlgo.doLayout()
 
         for (b1Addr, b2Addr), edgeItem in self.edgeItems.iteritems():
             edgeItem.setEdgePath(edgePaths[b1Addr, b2Addr])
+
+        self._updateSceneRect()
 
     def _updateSceneRect(self):
         # TODO: perhaps margins should be inside the graphItem
