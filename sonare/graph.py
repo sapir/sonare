@@ -4,6 +4,7 @@ import os
 import networkx
 import itertools
 from binascii import unhexlify
+from heapq import heappush, heappop
 from xml.sax.saxutils import escape as xmlEscape
 from HTMLParser import HTMLParser
 from mako.template import Template
@@ -351,6 +352,12 @@ class _EdgeLayoutAlgo(object):
     OUTLINE_SPACING = 10
     CLEARANCE = 15
 
+    """
+    When finding 'shortest' edge paths, angles in paths are penalized by
+    adding this 'distance' to the edge length.
+    """
+    ANGLE_PENALTY = 100
+
 
     def __init__(self, blocksAndRects, blockGraph):
         self.blockAddrs = [blockAddr for (blockAddr, _) in blocksAndRects]
@@ -435,6 +442,93 @@ class _EdgeLayoutAlgo(object):
                     dist = y2 - y1
                     self._graph.add_edge(p1, p2, weight=dist)
 
+    def _choosePath(self, source, target):
+        """
+        Choose a path through self._graph from source to target.
+
+        (Implementation is A*, but past-path cost makes angles costly, so we
+            prefer straight edges.)
+        """
+
+        # Code copied from networkx astar module.
+        #    Copyright (C) 2004-2011 by
+        #    Aric Hagberg <hagberg@lanl.gov>
+        #    Dan Schult <dschult@colgate.edu>
+        #    Pieter Swart <swart@lanl.gov>
+        #    All rights reserved.
+        #    BSD license.
+
+        # A few changes were made to customize the cost calculation. See code
+        # there for comments.
+
+        def manhattanDistance(p1, p2):
+            x1, y1 = p1
+            x2, y2 = p2
+            return abs(x2 - x1) + abs(y2 - y1)
+
+        heuristic = manhattanDistance
+
+        def calcPastCost(costToP1, p0, p1, p2):
+            baseCost = costToP1 + manhattanDistance(p1, p2)
+
+            if p0 is None:
+                # angle penalty is irrelevant, there is no previous line
+                # segment
+                return baseCost
+
+            x0, y0 = p0
+            x1, y1 = p1
+            x2, y2 = p2
+
+            if not ((x0 == x1 == x2) or (y0 == y1 == y2)):
+                # it's not a straight line
+                penalty = self.ANGLE_PENALTY
+            else:
+                penalty = 0
+
+            return baseCost + penalty
+
+
+        queue = [(0, hash(source), source, 0, None)]
+        enqueued = {}
+        explored = {}
+
+        while queue:
+            _, __, curnode, dist, parent = heappop(queue)
+
+            if curnode == target:
+                path = [curnode]
+                node = parent
+                while node is not None:
+                    path.append(node)
+                    node = explored[node]
+                path.reverse()
+                return path
+
+            if curnode in explored:
+                continue
+
+            explored[curnode] = parent
+
+            for neighbor, w in self._graph[curnode].items():
+                if neighbor in explored:
+                    continue
+
+                ncost = calcPastCost(dist, parent, curnode, neighbor)
+
+                if neighbor in enqueued:
+                    qcost, h = enqueued[neighbor]
+                    if qcost <= ncost:
+                        continue
+                else:
+                    h = heuristic(neighbor, target)
+                enqueued[neighbor] = ncost, h
+                heappush(queue, (ncost + h, hash(neighbor), neighbor,
+                                 ncost, curnode))
+
+        raise networkx.NetworkXNoPath(
+            "Node %s not reachable from %s" % (source, target))
+
     def _makeEdgePaths(self):
         """Make edgePaths dict. (Also removes used edges from _graph.)"""
 
@@ -447,8 +541,7 @@ class _EdgeLayoutAlgo(object):
         edgePaths = {}
         for eli in self.edgeLayoutInfos:
             try:
-                path = networkx.shortest_path(
-                    self._graph, eli.p1, eli.p2, weight='weight')
+                path = self._choosePath(eli.p1, eli.p2)
 
                 # don't use these edges for any other paths
                 for p1, p2 in zip(path, path[1:]):
