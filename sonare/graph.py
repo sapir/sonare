@@ -328,6 +328,7 @@ class _EdgeLayoutInfo(object):
         return (self.x2, self.y3)
 
 
+# TODO: minimum distance between edges
 class _EdgeLayoutAlgo(object):
     """
     Implementation of edge layout algorithm. (In a separate object
@@ -419,6 +420,9 @@ class _EdgeLayoutAlgo(object):
         adjacentXs = zip(sortedXs, sortedXs[1:])
         for (x1, x2) in adjacentXs:
             for y in ys:
+                # TODO: for a given y, we could just remove Xs inside rects
+                # crossing that Y, and then take adjacents. (and same for
+                # vertical). premature optimization?
                 if not any(
                     self._collideHorizLineAndRect(x1, x2, y, r)
                     for r in expandedBlockRects):
@@ -546,11 +550,13 @@ class _EdgeLayoutAlgo(object):
                 for p1, p2 in zip(path, path[1:]):
                     self._graph.remove_edge(p1, p2)
             except networkx.NetworkXNoPath:
+                # TODO: try again with more rect outlines
                 print('no path! between', p1, p2, file=sys.stderr)
                 # create direct edge for debugging
                 path = [p1, p2]
 
             # Force vertical beginning and end of edges.
+            # TODO: it'd be nicer to include these edges in the graph
             path.insert(0, eli.p0)
             path.append(eli.p3)
 
