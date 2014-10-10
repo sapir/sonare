@@ -28,47 +28,6 @@ R_ANAL_OP_TYPE_RET   = 5        # returns from subroutine
 R_ANAL_OP_TYPE_CRET  = R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_RET     # conditional return from subroutine
 
 
-def isEndBlockOp(op):
-    return ((op.type & 0xffffffff) & ~R_ANAL_OP_TYPE_COND) in [
-        R_ANAL_OP_TYPE_JMP, R_ANAL_OP_TYPE_UJMP, R_ANAL_OP_TYPE_RET]
-
-def normalizeAddr(addr):
-    if addr in (0, BAD_ADDR):
-        return None
-    else:
-        return addr
-
-def pointListToPairs(points):
-    return zip(points, points[1:])
-
-def pointListToLines(points):
-    return (QLineF(p1, p2) for (p1, p2) in pointListToPairs(points))
-
-def chainPointLists(pointLists):
-    # check that each list ends with the starting point of the next list
-    assert all(pl1[-1] == pl2[0]
-        for (pl1, pl2)
-        in zip(pointLists, pointLists[1:]))
-
-    return reduce(
-        lambda pl1, pl2: pl1[:-1] + pl2,
-        pointLists)
-
-def rectCorners(rect):
-    return [rect.topLeft(), rect.topRight(),
-        rect.bottomRight(), rect.bottomLeft()]
-
-def rectLines(rect):
-    corners = rectCorners(rect)
-    return pointListToLines(corners + [corners[-1]])
-
-def isEmptyIterable(iterable):
-    for _ in iterable:
-        return False
-
-    return True
-
-
 class MLStripper(HTMLParser):
     '''http://stackoverflow.com/questions/753052'''
     def __init__(self):
@@ -204,13 +163,20 @@ class MyBlock(object):
     def addr(self):
         return self.ops[0].addr
 
+    @staticmethod
+    def normalizeAddr(addr):
+        if addr in (0, BAD_ADDR):
+            return None
+        else:
+            return addr
+
     @property
     def jump(self):
-        return normalizeAddr(self.endOp.jump)
+        return MyBlock.normalizeAddr(self.endOp.jump)
 
     @property
     def fail(self):
-        return normalizeAddr(self.endOp.fail)
+        return MyBlock.normalizeAddr(self.endOp.fail)
 
     @property
     def asmOps(self):
@@ -235,6 +201,11 @@ class MyBlock(object):
         return 'blk_{0:x}'.format(self.addr)
 
     @staticmethod
+    def isEndBlockOp(op):
+        return ((op.type & 0xffffffff) & ~R_ANAL_OP_TYPE_COND) in [
+            R_ANAL_OP_TYPE_JMP, R_ANAL_OP_TYPE_UJMP, R_ANAL_OP_TYPE_RET]
+
+    @staticmethod
     def _makeMyBlockAt(r2core, addr):
         ops = []
         endOp = None
@@ -244,7 +215,7 @@ class MyBlock(object):
             op = r2core.op_anal(addr)
             ops.append(op)
 
-            if isEndBlockOp(op):
+            if MyBlock.isEndBlockOp(op):
                 endOp = op
                 # +1 including this one
                 opsLeft = op.delay + 1
