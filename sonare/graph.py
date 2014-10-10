@@ -296,13 +296,24 @@ class _EdgeLayoutInfo(object):
         self.bli1 = blockLayoutInfosByAddr[self.b1Addr]
         self.bli2 = blockLayoutInfosByAddr[self.b2Addr]
 
+        # the edge path goes from (x1, y1) to (x2, y2). but we add some bits
+        # before and after that:
+
+        # first line segment in edge is a straight downward line from
+        # (x1, y0) to (x1, y1)
         self.x1 = self.bli1.getOutgoingEdgePos(b2Addr)
         self.y0 = self.bli1.rect.bottom()
         self.y1 = self.y0 + _EdgeLayoutAlgo.CLEARANCE
 
+        # last line segment in edge is the one with the arrow, a straight
+        # downward line from (x2, y2) to (x2, y3)
         self.x2 = self.bli2.getIncomingEdgePos(b1Addr)
         self.y3 = self.bli2.rect.top()
         self.y2 = self.y3 - _EdgeLayoutAlgo.CLEARANCE
+
+    @property
+    def p0(self):
+        return (self.x1, self.y0)
 
     @property
     def p1(self):
@@ -311,6 +322,11 @@ class _EdgeLayoutInfo(object):
     @property
     def p2(self):
         return (self.x2, self.y2)
+
+    @property
+    def p3(self):
+        return (self.x2, self.y3)
+
 
 class _EdgeLayoutAlgo(object):
     """
@@ -535,8 +551,8 @@ class _EdgeLayoutAlgo(object):
                 path = [p1, p2]
 
             # Force vertical beginning and end of edges.
-            path.insert(0, (eli.x1, eli.y0))
-            path.append((eli.x2, eli.y3))
+            path.insert(0, eli.p0)
+            path.append(eli.p3)
 
             edgePaths[eli.b1Addr, eli.b2Addr] = path
 
