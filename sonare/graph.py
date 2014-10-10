@@ -110,10 +110,10 @@ class EdgeItem(QGraphicsPathItem):
     EPSILON = 0.5
 
 
-    def __init__(self, type_, block1Addr, block2Addr, parent):
+    def __init__(self, type_, block1Addr, block2Addr):
         '''type can be "jump", "ok" or "fail".'''
 
-        QGraphicsPathItem.__init__(self, parent)
+        QGraphicsPathItem.__init__(self)
         self.type_ = type_
         self.block1Addr = block1Addr
         self.block2Addr = block2Addr
@@ -720,8 +720,10 @@ class SonareGraphScene(QGraphicsScene):
 
         for b1Addr, b2Addr, edgeData in self.blockGraph.edges_iter(data=True):
             edgeType = edgeData['type']
-            edgeItem = EdgeItem(edgeType, b1Addr, b2Addr, self.graphItem)
+            edgeItem = EdgeItem(edgeType, b1Addr, b2Addr)
             self.edgeItems[b1Addr, b2Addr] = edgeItem
+
+            self.addItem(edgeItem)
 
     def _updateGraphNodeSizes(self):
         for addr, elem in self.blockElements.iteritems():
@@ -772,14 +774,7 @@ class SonareGraphScene(QGraphicsScene):
 
         self._layoutEdges()
 
-        # TODO: perhaps margins should be inside the graphItem
-        # TODO: include edges, too
-        r = reduce(QRect.united,
-            (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs))
-        r.adjust(
-            -self.HORIZ_MARGIN, -self.VERT_MARGIN,
-             self.HORIZ_MARGIN,  self.VERT_MARGIN)
-        self.setSceneRect(r)
+        self._updateSceneRect()
 
     def _layoutEdges(self):
         blocksAndRects = [
@@ -791,3 +786,17 @@ class SonareGraphScene(QGraphicsScene):
 
         for (b1Addr, b2Addr), edgeItem in self.edgeItems.iteritems():
             edgeItem.setEdgePath(edgePaths[b1Addr, b2Addr])
+
+    def _updateSceneRect(self):
+        # TODO: perhaps margins should be inside the graphItem
+        r = reduce(QRect.united,
+            (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs))
+
+        for edgeItem in self.edgeItems.itervalues():
+            r |= edgeItem.boundingRect().toRect()
+
+        r.adjust(
+            -self.HORIZ_MARGIN, -self.VERT_MARGIN,
+             self.HORIZ_MARGIN,  self.VERT_MARGIN)
+
+        self.setSceneRect(r)
