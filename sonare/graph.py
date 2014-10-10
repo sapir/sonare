@@ -45,111 +45,6 @@ def stripHtmlTags(html):
     return s.get_data()
 
 
-class EdgeItem(QGraphicsPathItem):
-    EDGE_WIDTH = 1.5
-    REVERSE_EDGE_WIDTH = 3
-
-    ARROW_PEN_COLOR = QColor(20, 20, 20)
-
-    COLORS_BY_TYPE = {
-            'jump': Qt.gray,
-            'ok':   Qt.green,
-            'fail': Qt.red,
-        }
-
-    '''spacing between ok/fail edges for a conditional branch'''
-    COND_EDGE_SPACING = 20
-
-    '''
-    amount that edge must leave block with a straight vertical line
-    before travelling to other block
-    '''
-    MIN_VERT_LENGTH = 15
-
-    EPSILON = 0.5
-
-
-    def __init__(self, type_, block1Addr, block2Addr):
-        '''type can be "jump", "ok" or "fail".'''
-
-        QGraphicsPathItem.__init__(self)
-        self.type_ = type_
-        self.block1Addr = block1Addr
-        self.block2Addr = block2Addr
-
-        self._updatePen()
-
-        self.arrow = self._makeArrow()
-
-    @property
-    def color(self):
-        return self.COLORS_BY_TYPE[self.type_]
-
-    @property
-    def edgeWidth(self):
-        if self.path() is None or self.path().elementCount() < 2:
-            return self.EDGE_WIDTH
-
-        firstElem = self.path().elementAt(0)
-        assert firstElem.isMoveTo()
-
-        lastElem = self.path().elementAt(self.path().elementCount() - 1)
-        assert lastElem.isLineTo()
-
-        isReverse = (lastElem.y < firstElem.y)
-        return self.REVERSE_EDGE_WIDTH if isReverse else self.EDGE_WIDTH
-
-    @property
-    def _lastLine(self):
-        path = self.path()
-
-        elemCnt = path.elementCount()
-        if elemCnt < 2:
-            return None
-
-        # note each elem can be either move to/line to/curve to
-        assert not path.elementAt(elemCnt - 1).isMoveTo()
-        return QLineF(
-            QPointF(path.elementAt(elemCnt - 2)),
-            QPointF(path.elementAt(elemCnt - 1)))
-
-    def setEdgePath(self, path):
-        ppath = QPainterPath()
-
-        ppath.moveTo(*path[0])
-        for pt in path[1:]:
-            ppath.lineTo(*pt)
-
-        self.setPath(ppath)
-
-        self._updateArrowPos()
-        self._updatePen()
-
-    def _updatePen(self):
-        pen = QPen(self.color, self.edgeWidth)
-        pen.setCapStyle(Qt.FlatCap)
-        self.setPen(pen)
-
-    def _makeArrow(self):
-        # right side of arrow is at (0,0)
-        # this will be the end of the line
-        pts = [QPointF(-10, -4.5), QPointF(0, 0), QPointF(-10, 4.5)]
-        poly = QPolygonF(pts)
-
-        # slightly move triangle so that it covers wide edge widths
-        poly.translate(2, 0)
-
-        polyItem = QGraphicsPolygonItem(poly, self)
-        polyItem.setPen(QPen(self.ARROW_PEN_COLOR))
-        polyItem.setBrush(self.color)
-        return polyItem
-
-    def _updateArrowPos(self):
-        line = self._lastLine
-        self.arrow.setPos(line.p2())
-        self.arrow.setRotation(-line.angle())
-
-
 class MyBlock(object):
     def __init__(self, r2core, ops, endOp):
         '''(endOp causes the end of the block, but might not be the
@@ -491,7 +386,6 @@ class _EdgeLayoutAlgo(object):
 
             return baseCost + penalty
 
-
         queue = [(0, hash(source), source, 0, None)]
         enqueued = {}
         explored = {}
@@ -603,7 +497,7 @@ class SonareGraphScene(QGraphicsScene):
         QGraphicsScene.clear(self)
 
         self.funcAddr = self.myBlocks = self.myBlocksByAddr = \
-            self.blockGraph = self.edgeItems = None
+            self.blockGraph = None
 
     def loadFunc(self, funcAddr):
         if funcAddr == self.funcAddr:
@@ -615,7 +509,6 @@ class SonareGraphScene(QGraphicsScene):
 
         self._makeBlockGraph()
         self._makeGraphItem()
-        self._makeEdgeItemsFromGraph()
         self._layoutBlockGraph()
 
     @property
@@ -649,6 +542,14 @@ class SonareGraphScene(QGraphicsScene):
     def _blockElementIDToAddr(self, elemID):
         assert elemID[0] == 'b'
         return int(elemID[1:], 16)
+
+    def _getEdgeElementID(self, b1Addr, b2Addr):
+        return "e_{:08x}_{:08x}".format(b1Addr, b2Addr)
+
+    def _edgeElementIDToAddrs(self, elemID):
+        idParts = elemID.split('_')
+        assert len(idParts) == 3 and idParts[0] == 'e'
+        return (int(idParts[1], 16), int(idParts[2], 16))
 
     def _parseCssSize(self, cssSize):
         assert cssSize.endswith('px'), \
@@ -684,6 +585,58 @@ class SonareGraphScene(QGraphicsScene):
         nodeData['x'] = x
         nodeData['y'] = y
 
+    @staticmethod
+    def _pathToSvgStr(path):
+        ptStrs = ['{} {}'.format(x, y) for (x, y) in path]
+        return ' '.join(
+            # first point is a move-to
+            ['M ' + ptStrs[0]]
+            # the rest are line-tos
+            + ['L ' + s for s in ptStrs[1:]])
+
+    def _setElementClass(self, elem, className, enabled):
+        """
+        Sets an HTML class for a QWebElement, without affecting the element's
+        other classes.
+        """
+
+        classes = set(elem.attribute('class').split())
+
+        if enabled:
+            classes.add(className)
+        else:
+            try:
+                classes.remove(className)
+            except KeyError:
+                pass
+
+        elem.setAttribute('class', ' '.join(classes))
+
+    def _setEdgePath(self, b1Addr, b2Addr, path):
+        gElem = self.edgeElements[b1Addr, b2Addr]
+
+        # get path start and end points
+        x0, y0 = path[0]
+        x1, y1 = path[-1]
+
+        # HACK: move edge end point a bit higher so that it ends behind
+            # the arrow. (otherwise the arrow tip doesn't completely cover the
+            # edge path's line)
+        actualEdgePath = path[:-1] + [(x1, y1 - 5)]
+
+        pathElem = gElem.findFirst('.edgePath')
+        pathElem.setAttribute('d', self._pathToSvgStr(actualEdgePath))
+
+        # put arrow at end of (original) path. the arrow polygon is defined
+        # so that the coordinate we're specifying, the arrow's origin, is at
+        # its tip.
+        arrowElem = gElem.findFirst('.edgeArrow')
+        arrowElem.setAttribute('x', unicode(x1))
+        arrowElem.setAttribute('y', unicode(y1))
+
+        isReverseEdge = (y1 <= y0)
+        self._setElementClass(gElem, 'reverse', isReverseEdge)
+
     def _makeGraphItem(self):
         self.graphItem = QGraphicsWebView()
         self.graphItem.setResizesToContents(True)
@@ -695,6 +648,10 @@ class SonareGraphScene(QGraphicsScene):
             blocks=[
                 (self._getBlockElementID(mb.addr), mb)
                 for mb in self.myBlocks],
+            edges=[
+                (self._getEdgeElementID(b1Addr, b2Addr), edgeInfo['type'])
+                for (b1Addr, b2Addr, edgeInfo)
+                in self.blockGraph.edges_iter(data=True)],
             fmtAddr=self._formatAddr,
             fmtHex=self._formatHex,
             fmtAsm=self._formatAsm)
@@ -702,10 +659,15 @@ class SonareGraphScene(QGraphicsScene):
 
         self.addItem(self.graphItem)
 
+        mainFrame = self.graphItem.page().mainFrame()
+
         self.blockElements = dict(
             (self._blockElementIDToAddr(blockElem.attribute('id')), blockElem)
-            for blockElem
-            in self.graphItem.page().mainFrame().findAllElements(".block"))
+            for blockElem in mainFrame.findAllElements(".block"))
+
+        self.edgeElements = dict(
+            (self._edgeElementIDToAddrs(edgeElem.attribute('id')), edgeElem)
+            for edgeElem in mainFrame.findAllElements(".edge"))
 
     def _formatAddr(self, addr):
         '''Format address nicely as HTML'''
@@ -723,16 +685,6 @@ class SonareGraphScene(QGraphicsScene):
     def _formatAsm(self, addr, op):
         '''Format op's assembly nicely as HTML'''
         return self.mainWin.asmFormatter.format(unhexlify(op.get_hex()), addr)
-
-    def _makeEdgeItemsFromGraph(self):
-        self.edgeItems = {}
-
-        for b1Addr, b2Addr, edgeData in self.blockGraph.edges_iter(data=True):
-            edgeType = edgeData['type']
-            edgeItem = EdgeItem(edgeType, b1Addr, b2Addr)
-            self.edgeItems[b1Addr, b2Addr] = edgeItem
-
-            self.addItem(edgeItem)
 
     def _setGraphNodeSizes(self, scalingFactor):
         for addr, elem in self.blockElements.iteritems():
@@ -789,21 +741,40 @@ class SonareGraphScene(QGraphicsScene):
         layoutAlgo = _EdgeLayoutAlgo(self.blockGraph)
         edgePaths = layoutAlgo.doLayout()
 
-        for (b1Addr, b2Addr), edgeItem in self.edgeItems.iteritems():
-            edgeItem.setEdgePath(edgePaths[b1Addr, b2Addr])
+        for b1Addr, b2Addr in self.blockGraph.edges_iter():
+            self._setEdgePath(b1Addr, b2Addr, edgePaths[b1Addr, b2Addr])
 
-        self._updateSceneRect()
+        self._updateSceneRect(edgePaths)
 
-    def _updateSceneRect(self):
+    @staticmethod
+    def _pathBoundingRect(path):
+        xs = set(x for (x, _) in path)
+        ys = set(y for (_, y) in path)
+
+        x0 = min(xs)
+        x1 = max(xs)
+
+        y0 = min(ys)
+        y1 = max(ys)
+
+        return QRect(x0, y0, x1 - x0, y1 - y0)
+
+    def _updateSceneRect(self, edgePaths):
         # TODO: perhaps margins should be inside the graphItem
         r = reduce(QRect.united,
-            (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs))
-
-        for edgeItem in self.edgeItems.itervalues():
-            r |= edgeItem.boundingRect().toRect()
+            itertools.chain(
+                (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs),
+                (self._pathBoundingRect(path)
+                    for path in edgePaths.itervalues())
+                ))
 
         r.adjust(
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
              self.HORIZ_MARGIN,  self.VERT_MARGIN)
 
         self.setSceneRect(r)
+
+        mainFrame = self.graphItem.page().mainFrame()
+        svgElem = mainFrame.findFirstElement('svg#edges')
+        svgElem.setStyleProperty('width',  '{}px'.format(r.width()))
+        svgElem.setStyleProperty('height', '{}px'.format(r.height()))
