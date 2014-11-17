@@ -46,17 +46,9 @@ install first:
   sudo python setup.py install
   ```
 
-* networkx
-
-  `sudo apt-get install python-networkx`
-
-* PySide
+* Various python modules: networkx, PySide, mako
 
   ```
-  sudo apt-get install python-pyside.qtcore python-pyside.qtgui \
-      python-pyside.qtwebkit
+  sudo apt-get install python-networkx python-pyside.qtcore \
+      python-pyside.qtgui python-pyside.qtwebkit python-mako
   ```
-
-* mako
-
-  `sudo apt-get install python-mako`
