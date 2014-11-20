@@ -267,4 +267,5 @@ if __name__ == '__main__':
         pass
 
     window.showMaximized()
+    window.raise_()
     app.exec_()
