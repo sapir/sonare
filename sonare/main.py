@@ -207,12 +207,17 @@ class SonareWindow(QMainWindow):
             return None
 
         try:
-            return int(s, 16)
+            return self.getAddr(s)
         except ValueError:
             # TODO: message box
             return None
 
     def getAddr(self, addrName):
+        try:
+            return int(addrName, 16)
+        except ValueError:
+            pass
+
         if isinstance(addrName, unicode):
             addrName = addrName.encode('ascii')
 
