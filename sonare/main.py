@@ -135,6 +135,16 @@ class SonareWindow(QMainWindow):
 
         self._updateWindowTitle()
 
+        shortcut = QShortcut(QKeySequence(u"Ctrl+G"), self)
+        shortcut.activated.connect(self.viewGoto)
+
+    def viewGoto(self):
+        addr = self.inputAddr('Sonare - Goto', 'Enter an address:')
+        if addr is None:
+            return
+
+        self.gotoAddr(addr)
+
     def _makeScene(self):
         self.scene = graph.SonareGraphScene(self)
         self.view = QGraphicsView(self.scene)
@@ -190,6 +200,17 @@ class SonareWindow(QMainWindow):
             self.asmFormatter = MipsAsmFormatter(self)
         else:
             raise NotImplementedError("asm formatting for {}".format(arch))
+
+    def inputAddr(self, title, prompt):
+        s, ok = QInputDialog.getText(self, title, prompt)
+        if not ok:
+            return None
+
+        try:
+            return int(s, 16)
+        except ValueError:
+            # TODO: message box
+            return None
 
     def getAddr(self, addrName):
         if isinstance(addrName, unicode):
