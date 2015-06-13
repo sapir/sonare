@@ -258,10 +258,13 @@ class SonareWindow(QMainWindow):
     def isBigEndian(self):
         return self.r2core.config.get('cfg.bigendian') == 'true'
 
+    def getBytes(self, addr, size):
+        hexStr = self.r2core.cmd_str('p8 {}@{:#x}'.format(size, addr)).strip()
+        return unhexlify(hexStr)
+
     def getWord(self, addr):
         # TODO: use r2 api
-        hexStr = self.r2core.cmd_str('p8 4@{:#x}'.format(addr)).strip()
-        buf = unhexlify(hexStr)
+        buf = self.getBytes(addr, 4)
         fmt = '>L' if self.isBigEndian else '<L'
         return unpack(fmt, buf)[0]
 
