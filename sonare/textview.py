@@ -20,9 +20,15 @@ class TextLineItem(QGraphicsItemGroup):
         .reg                { color: #E96976; }
         '''
 
-    def __init__(self, parent, addr, asmOp, font):
-        QGraphicsItemGroup.__init__(self, parent)
-        self.textView = parent
+    NUM_COLUMNS = 3
+    COLIDX_ADDR, COLIDX_HEX, COLIDX_ASM = range(NUM_COLUMNS)
+
+    COLUMN_SPACING = 15
+
+
+    def __init__(self, mainWin, addr, asmOp, font):
+        QGraphicsItemGroup.__init__(self)
+        self.mainWin = mainWin
 
         self.addr = addr
         self.asmOp = asmOp
@@ -33,12 +39,11 @@ class TextLineItem(QGraphicsItemGroup):
             self._makeTextItem(self.htmlHex),
             self._makeTextItem(self.htmlAsm),
             ]
+        assert len(self.items) == self.NUM_COLUMNS
 
-        self._updateColWidths()
-
-    @property
-    def mainWin(self):
-        return self.textView.mainWin
+        # default column width, should be overridden later with updateColWidths
+        for i, item in enumerate(self.items):
+            item.setPos(i * 100, 0)
 
     def _makeTextItem(self, html):
         item = QGraphicsTextItem(self)
@@ -78,49 +83,28 @@ class TextLineItem(QGraphicsItemGroup):
         return self.mainWin.asmFormatter.format(
             unhexlify(self.asmOp.get_hex()), self.addr)
 
-    def _updateColWidths(self):
-        x = 0
-        for item, colWidth in zip(self.items, self.textView.colWidths):
-            item.setPos(x, 0)
-            x += colWidth
-
-
-class SonareTextView(QGraphicsItemGroup):
-    COLUMN_SPACING = 15
-
-    def __init__(self, mainWin, curAddr):
-        QGraphicsItemGroup.__init__(self)
-        self.mainWin = mainWin
-        self.curAddr = curAddr
-
-        self.font = QFont("Monospace", 8)
-
-        self.numColumns = 3
-
-        # start with a guess
-        self.colWidths = [100] * self.numColumns
-
-        op = self.mainWin.r2core.disassemble(self.curAddr)
-        self.textLines = [TextLineItem(self, curAddr, op, self.font)]
-
-        # now fix column widths
-        self._updateColWidths()
-
-    def _getColWidth(self, colIdx):
+    @staticmethod
+    def _getColWidth(colIdx, textLines):
         w = max(textln.items[colIdx].document().idealWidth()
-                    for textln in self.textLines)
+                    for textln in textLines)
 
-        isLast = (colIdx == self.numColumns - 1)
+        isLast = (colIdx == TextLineItem.NUM_COLUMNS - 1)
         if not isLast:
-            w += self.COLUMN_SPACING
+            w += TextLineItem.COLUMN_SPACING
 
         return w
 
-    def _updateColWidths(self):
-        self.colWidths = [self._getColWidth(i) for i in xrange(self.numColumns)]
+    @staticmethod
+    def updateColWidths(textLines):
+        colWidths = [TextLineItem._getColWidth(i, textLines)
+            for i in xrange(TextLineItem.NUM_COLUMNS)]
 
-        for textln in self.textLines:
-            textln._updateColWidths()
+        x = 0
+        for i, w in enumerate(colWidths):
+            for textln in textLines:
+                textln.items[i].setPos(x, 0)
+
+            x += w
 
 
 class SonareTextScene(QGraphicsScene):
@@ -133,5 +117,13 @@ class SonareTextScene(QGraphicsScene):
 
         self.setBackgroundBrush(mainWin.WINDOW_COLOR)
 
-        view = SonareTextView(mainWin, 0x804841b)
-        self.addItem(view)
+        self.font = QFont("Monospace", 8)
+        self.lineSpacing = QFontMetricsF(self.font).lineSpacing()
+
+        curAddr = 0x804841b
+        op = self.mainWin.r2core.disassemble(curAddr)
+        self.textLines = [TextLineItem(mainWin, curAddr, None, self.font)]
+        TextLineItem.updateColWidths(self.textLines)
+
+        for textln in self.textLines:
+            self.addItem(textln)
