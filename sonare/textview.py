@@ -1,6 +1,7 @@
 from __future__ import print_function
 import sys
 import os
+from collections import deque
 from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
 from PyQt5.QtCore import *
@@ -41,6 +42,9 @@ class TextLineItem(QGraphicsItemGroup):
             self._makeTextItem(self.htmlAsm),
             ]
         assert len(self.items) == self.NUM_COLUMNS
+
+        self.myTextWidths = [item.document().idealWidth()
+            for item in self.items]
 
         # default column width, should be overridden later with updateColWidths
         for i, item in enumerate(self.items):
@@ -86,8 +90,7 @@ class TextLineItem(QGraphicsItemGroup):
 
     @staticmethod
     def _getColWidth(colIdx, textLines):
-        w = max(textln.items[colIdx].document().idealWidth()
-                    for textln in textLines)
+        w = max(textln.myTextWidths[colIdx] for textln in textLines)
 
         isLast = (colIdx == TextLineItem.NUM_COLUMNS - 1)
         if not isLast:
@@ -110,6 +113,7 @@ class TextLineItem(QGraphicsItemGroup):
 
 class SonareTextScene(QGraphicsScene):
     HORIZ_MARGIN = VERT_MARGIN = 40
+    REMEMBERED_LINES = 10
 
 
     def __init__(self, mainWin):
@@ -121,10 +125,80 @@ class SonareTextScene(QGraphicsScene):
         self.font = QFont("Monospace", 8)
         self.lineSpacing = QFontMetricsF(self.font).lineSpacing()
 
-        curAddr = 0x804841b
-        op = self.mainWin.r2core.disassemble(curAddr)
-        self.textLines = [TextLineItem(mainWin, curAddr, None, self.font)]
-        TextLineItem.updateColWidths(self.textLines)
+        self.textLines = deque()
 
-        for textln in self.textLines:
-            self.addItem(textln)
+        addr = mainWin.getAddr('main')
+        item = self._makeLine(0, addr, None)
+        self.addItem(item)
+        self.textLines.append(item)
+
+    @property
+    def curTop(self):
+        return self.textLines[0].y()
+
+    @property
+    def curBottom(self):
+        return self.textLines[-1].y() + self.lineSpacing
+
+    def _makeLine(self, y, addr, asmOp):
+        item = TextLineItem(self.mainWin, addr, asmOp, self.font)
+        item.setPos(0, y)
+        return item
+
+    def setLines(self, top, bottom):
+        linesChanged = False
+
+        # add any required lines:
+
+        while self.curTop >= top:
+            # add lines upwards
+            item = self._makeLine(self.curTop - self.lineSpacing,
+                self.textLines[0].addr - 4, None)
+            self.addItem(item)
+            self.textLines.appendleft(item)
+
+            linesChanged = True
+
+        while self.curBottom <= bottom:
+            # add lines downwards
+            item = self._makeLine(self.curBottom,
+                self.textLines[-1].addr + 4, None)
+            self.addItem(item)
+            self.textLines.append(item)
+
+            linesChanged = True
+            # op = self.mainWin.r2core.disassemble(curAddr)
+
+        # remove extraneous lines:
+
+        rememberedY = self.REMEMBERED_LINES * self.lineSpacing
+        while self.curTop < top - rememberedY:
+            self.removeItem(self.textLines.popleft())
+            linesChanged = True
+
+        while self.curBottom > bottom + rememberedY:
+            self.removeItem(self.textLines.pop())
+            linesChanged = True
+
+
+        if linesChanged:
+            TextLineItem.updateColWidths(self.textLines)
+
+
+class SonareTextView(QGraphicsView):
+    def __init__(self, mainWin):
+        self.scene = SonareTextScene(mainWin)
+        QGraphicsView.__init__(self, self.scene)
+
+        self.setRenderHints(
+            QPainter.Antialiasing
+            | QPainter.TextAntialiasing
+            | QPainter.SmoothPixmapTransform
+            | QPainter.HighQualityAntialiasing)
+
+    def scrollContentsBy(self, dx, dy):
+        QGraphicsView.scrollContentsBy(self, dx, dy)
+
+        sceneViewPoly = self.mapToScene(self.viewport().rect())
+        r = sceneViewPoly.boundingRect()
+        self.scene.setLines(r.top(), r.bottom())
