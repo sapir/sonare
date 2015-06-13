@@ -3,8 +3,9 @@ import sys
 import os
 from binascii import unhexlify
 from struct import pack, unpack
-from PySide.QtCore import *
-from PySide.QtGui import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 from r2.r_core import RCore
 from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
@@ -68,7 +69,7 @@ class FilteredTreeDock(QDockWidget):
         self.treeView.setModel(self.proxyModel)
 
         self.treeView.setRootIsDecorated(False)
-        self.treeView.setEditTriggers(0)
+        self.treeView.setEditTriggers(QTreeView.NoEditTriggers)
         self.treeView.setAllColumnsShowFocus(True)
         self.treeView.setUniformRowHeights(True)
         self.treeView.setSortingEnabled(True)

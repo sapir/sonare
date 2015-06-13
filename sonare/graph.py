@@ -8,9 +8,11 @@ from heapq import heappush, heappop
 from xml.sax.saxutils import escape as xmlEscape
 from HTMLParser import HTMLParser
 from mako.template import Template
-from PySide.QtCore import *
-from PySide.QtGui import *
-from PySide.QtWebKit import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtWebKit import *
+from PyQt5.QtWebKitWidgets import *
 import main
 
 
@@ -772,7 +774,7 @@ class SonareGraphScene(QGraphicsScene):
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
              self.HORIZ_MARGIN,  self.VERT_MARGIN)
 
-        self.setSceneRect(r)
+        self.setSceneRect(QRectF(r))
 
         mainFrame = self.graphItem.page().mainFrame()
         svgElem = mainFrame.findFirstElement('svg#edges')

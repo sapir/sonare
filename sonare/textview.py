@@ -3,9 +3,10 @@ import sys
 import os
 from binascii import unhexlify
 from xml.sax.saxutils import escape as xmlEscape
-from PySide.QtCore import *
-from PySide.QtGui import *
-from PySide.QtWebKit import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtWebKit import *
 
 
 class TextLineItem(QGraphicsItemGroup):
