@@ -46,9 +46,10 @@ install first:
   sudo python setup.py install
   ```
 
-* Various python modules: networkx, PySide, mako
+* Various python modules: networkx, PyQt5, mako, sortedcontainers
 
   ```
-  sudo apt-get install python-networkx python-pyside.qtcore \
-      python-pyside.qtgui python-pyside.qtwebkit python-mako
+  sudo apt-get install python-networkx python-pyqt5 \
+      python-pyqt5.qtwebkit python-mako
+  sudo pip install sortedcontainers
   ```
