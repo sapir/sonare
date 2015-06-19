@@ -123,11 +123,21 @@ class SonareTextScene(QGraphicsScene):
 
         self.textLines = deque()
 
-        addr = mainWin.getAddr('main')
-        size = mainWin.core.nextAddr(addr) - addr
+        self.gotoAddr(0)
+
+    def gotoAddr(self, addr):
+        self.clear()        # clear QGraphicsScene
+        self.textLines.clear()
+
+        size = self.mainWin.core.nextAddr(addr) - addr
         item = self._makeLine(0, addr, size)
         self.addItem(item)
         self.textLines.append(item)
+
+        # TODO: when >1 view, setLines ranges will conflict
+        for v in self.views():
+            # TODO: this should be in View code, not here
+            v.centerOn(item.x(), item.y())
 
     @property
     def curTop(self):
@@ -201,6 +211,11 @@ class SonareTextView(QGraphicsView):
 
         self.linesUpdated.connect(self.scene.setLines)
 
+    def getYRange(self):
+        sceneViewPoly = self.mapToScene(self.viewport().rect())
+        r = sceneViewPoly.boundingRect()
+        return (r.top(), r.bottom())
+
     def resizeEvent(self, evt):
         QGraphicsView.resizeEvent(self, evt)
         self._emitLinesSignal()
@@ -210,6 +225,8 @@ class SonareTextView(QGraphicsView):
         self._emitLinesSignal()
 
     def _emitLinesSignal(self):
-        sceneViewPoly = self.mapToScene(self.viewport().rect())
-        r = sceneViewPoly.boundingRect()
-        self.linesUpdated.emit(r.top(), r.bottom())
+        y0, y1 = self.getYRange()
+        self.linesUpdated.emit(y0, y1)
+
+    def gotoAddr(self, addr):
+        self.scene.gotoAddr(addr)

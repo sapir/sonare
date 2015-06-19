@@ -12,6 +12,7 @@ from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
 from sortedcontainers import SortedList
 import graph
+import textview
 
 
 MAIN_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -214,6 +215,9 @@ class SonareWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(u"Ctrl+G"), self)
         shortcut.activated.connect(self.viewGoto)
 
+        shortcut = QShortcut(QKeySequence(u"Ctrl+R"), self)
+        shortcut.activated.connect(self.viewGraph)
+
     def viewGoto(self):
         addr = self.inputAddr('Sonare - Goto', 'Enter an address:')
         if addr is None:
@@ -221,15 +225,29 @@ class SonareWindow(QMainWindow):
 
         self.gotoAddr(addr)
 
+    def viewGraph(self):
+        self.curView.setParent(None)
+
+        if self.curView is self.textView:
+            self.curView = self.graphView
+        else:
+            self.curView = self.textView
+
+        self.setCentralWidget(self.curView)
+
     def _makeScene(self):
-        self.scene = graph.SonareGraphScene(self)
-        self.view = QGraphicsView(self.scene)
-        self.view.setRenderHints(
+        self.textView = textview.SonareTextView(self)
+
+        self.graphScene = graph.SonareGraphScene(self)
+        self.graphView = QGraphicsView(self.graphScene)
+        self.graphView.setRenderHints(
             QPainter.Antialiasing
             | QPainter.TextAntialiasing
             | QPainter.SmoothPixmapTransform
             | QPainter.HighQualityAntialiasing)
-        self.setCentralWidget(self.view)
+
+        self.curView = self.textView
+        self.setCentralWidget(self.curView)
 
     def _makeFlagList(self):
         model = FlagListModel(self)
@@ -316,11 +334,13 @@ class SonareWindow(QMainWindow):
             self.funcName = func.name
             funcAddr = func.addr
 
-        self.scene.loadFunc(funcAddr)
+        self.textView.gotoAddr(funcAddr)
 
-        firstBlock = self.scene.myBlocks[0]
-        r = self.scene.getBlockRect(firstBlock.addr)
-        self.view.centerOn(r.center().x(), r.top())
+        self.graphScene.loadFunc(funcAddr)
+
+        firstBlock = self.graphScene.myBlocks[0]
+        r = self.graphScene.getBlockRect(firstBlock.addr)
+        self.graphView.centerOn(r.center().x(), r.top())
 
         self._updateWindowTitle()
 
