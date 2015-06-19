@@ -1,6 +1,7 @@
 from __future__ import print_function
 import sys
 import os
+import json
 from binascii import unhexlify
 from struct import pack, unpack
 from PyQt5.QtCore import *
@@ -9,6 +10,7 @@ from PyQt5.QtWidgets import *
 from r2.r_core import RCore
 from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
+from sortedcontainers import SortedList
 import graph
 
 
@@ -97,6 +99,78 @@ class FilteredTreeDock(QDockWidget):
     def _onSearchTextChanged(self, text):
         regexp = QRegExp(text, Qt.CaseInsensitive)
         self.proxyModel.setFilterRegExp(regexp)
+
+
+class Core(object):
+    def __init__(self, r2core):
+        self.r2core = r2core
+        self.opcodeAddrs = self._getOpcodeAddrs()
+
+    def cmd(self, s, *args):
+        if args:
+            s = s.format(*args)
+
+        return self.r2core.cmd_str(s)
+
+    def cmdJson(self, s, *args):
+        if args:
+            s = s.format(*args)
+
+        return json.loads(self.cmd(s))
+
+    def seek(self, ofs):
+        self.cmd('s {}', ofs)
+
+    def tell(self):
+        return int(self.cmd('s'), 0)
+
+    def getFunctions(self):
+        return self.cmdJson('aflj')
+
+    def _getOpcodeAddrs(self):
+        addrs = SortedList()
+
+        funcs = self.getFunctions()
+
+        for f in funcs:
+            print('addrs for', f['name'])
+            ofs = f['offset']
+            sz = f['size']
+            end = ofs + sz
+
+            self.seek(ofs)
+            cur = ofs
+            while cur < end:
+                addrs.add(cur)
+
+                self.cmd('so')
+                cur = self.tell()
+
+        return addrs
+
+    def getAsmOp(self, addr):
+        if addr in self.opcodeAddrs:
+            return self.r2core.disassemble(addr)
+        else:
+            return None
+
+    def nextAddr(self, addr):
+        self.seek(addr)
+        self.cmd('so')
+        return self.tell()
+
+    def prevAddr(self, addr):
+        # check if prev addr in opcodeAddrs is good (might not be adjacent
+        # to given address)
+        idx = self.opcodeAddrs.bisect_left(addr)
+        # if idx == 0, idx - 1 is -1, will handle by forcing maybePrev < addr
+        maybePrev = self.opcodeAddrs[idx - 1]
+        if maybePrev >= addr:
+            return addr - 1
+        elif self.nextAddr(maybePrev) >= addr:
+            return maybePrev
+        else:
+            return addr - 1
 
 
 class SonareWindow(QMainWindow):
@@ -191,6 +265,8 @@ class SonareWindow(QMainWindow):
 
         # clean up function overlaps
         self.r2core.cmd_str('aff')
+
+        self.core = Core(self.r2core)
 
         self.filePath = path
 
