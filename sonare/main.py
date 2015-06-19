@@ -14,8 +14,6 @@ from sortedcontainers import SortedList
 import graph
 
 
-BASE_ADDR = 0x08048000
-
 MAIN_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -257,7 +255,7 @@ class SonareWindow(QMainWindow):
         self.r2core = RCore()
         self.r2core.flags.space_set(b'symbols')
 
-        self.r2core.file_open(path.encode('ascii'), False, BASE_ADDR)
+        self.r2core.file_open(path.encode('ascii'), False, 0)
         self.r2core.bin_load("", 0)
 
         self.r2core.anal_all()
