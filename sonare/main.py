@@ -153,9 +153,12 @@ class Core(object):
             return None
 
     def nextAddr(self, addr):
-        self.seek(addr)
-        self.cmd('so')
-        return self.tell()
+        if addr in self.opcodeAddrs:
+            self.seek(addr)
+            self.cmd('so')
+            return self.tell()
+        else:
+            return addr + 1
 
     def prevAddr(self, addr):
         # check if prev addr in opcodeAddrs is good (might not be adjacent
