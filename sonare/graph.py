@@ -522,10 +522,10 @@ class SonareGraphScene(QGraphicsScene):
         for b in self.myBlocks:
             self.blockGraph.add_node(b.addr)
 
-            if b.fail is not None:
+            if b.fail is not None and b.fail in self.myBlocksByAddr:
                 self.blockGraph.add_edge(b.addr, b.fail, type='fail')
 
-            if b.jump is not None:
+            if b.jump is not None and b.jump in self.myBlocksByAddr:
                 type_ = 'jump' if b.fail is None else 'ok'
                 self.blockGraph.add_edge(b.addr, b.jump, type=type_)
 
