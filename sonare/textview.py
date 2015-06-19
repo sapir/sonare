@@ -153,7 +153,7 @@ class SonareTextScene(QGraphicsScene):
         while self.curTop >= top:
             # add lines upwards
             item = self._makeLine(self.curTop - self.lineSpacing,
-                self.textLines[0].addr - 4, None)
+                self.mainWin.core.prevAddr(self.textLines[0].addr), None)
             self.addItem(item)
             self.textLines.appendleft(item)
 
@@ -162,7 +162,7 @@ class SonareTextScene(QGraphicsScene):
         while self.curBottom <= bottom:
             # add lines downwards
             item = self._makeLine(self.curBottom,
-                self.textLines[-1].addr + 4, None)
+                self.mainWin.core.nextAddr(self.textLines[-1].addr), None)
             self.addItem(item)
             self.textLines.append(item)
 
