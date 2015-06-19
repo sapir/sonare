@@ -48,11 +48,11 @@ def stripHtmlTags(html):
 
 
 class MyBlock(object):
-    def __init__(self, r2core, ops, endOp):
+    def __init__(self, core, ops, endOp):
         '''(endOp causes the end of the block, but might not be the
             last op due to delay slots)'''
 
-        self.r2core = r2core
+        self.core = core
         self.ops = ops
         self.endOp = endOp
 
@@ -79,19 +79,10 @@ class MyBlock(object):
     def asmOps(self):
         for op in self.ops:
             addr = op.addr
-            asmOp = self.r2core.disassemble(addr)
+            asmOp = self.core.getAsmOp(addr)
             assert asmOp is not None, \
                 "Couldn't disassemble @ {:#x}".format(addr)
             yield (addr, asmOp)
-
-        # addr = self.r2block.addr
-        # endAddr = addr + self.r2block.size
-
-        # while addr < endAddr:
-        #     op = self.r2core.disassemble(addr)
-        #     yield (addr, op)
-
-        #     addr += op.size
 
     @property
     def labelName(self):
@@ -103,13 +94,13 @@ class MyBlock(object):
             R_ANAL_OP_TYPE_JMP, R_ANAL_OP_TYPE_UJMP, R_ANAL_OP_TYPE_RET]
 
     @staticmethod
-    def _makeMyBlockAt(r2core, addr):
+    def _makeMyBlockAt(core, addr):
         ops = []
         endOp = None
 
         opsLeft = -1
         while opsLeft != 0:
-            op = r2core.op_anal(addr)
+            op = core.analyzeOp(addr)
             ops.append(op)
 
             if MyBlock.isEndBlockOp(op):
@@ -121,10 +112,10 @@ class MyBlock(object):
             if opsLeft > 0:
                 opsLeft -= 1
 
-        return MyBlock(r2core, ops, endOp)
+        return MyBlock(core, ops, endOp)
 
     @staticmethod
-    def _makeFuncBlocks(r2core, funcAddr):
+    def _makeFuncBlocks(core, funcAddr):
         visited = set()
 
         todo = set([funcAddr])
@@ -135,7 +126,7 @@ class MyBlock(object):
 
             visited.add(cur)
 
-            mb = MyBlock._makeMyBlockAt(r2core, cur)
+            mb = MyBlock._makeMyBlockAt(core, cur)
             yield mb
 
             if mb.jump:
@@ -523,7 +514,7 @@ class SonareGraphScene(QGraphicsScene):
         #     GraphBlock(self.mainWin, r2b)
         #     for r2b in r2blocks]
         self.myBlocks = list(
-            MyBlock._makeFuncBlocks(self.mainWin.r2core, self.funcAddr))
+            MyBlock._makeFuncBlocks(self.mainWin.core, self.funcAddr))
 
         self.myBlocksByAddr = dict((b.addr, b) for b in self.myBlocks)
 

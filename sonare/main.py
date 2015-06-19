@@ -147,6 +147,9 @@ class Core(object):
 
         return addrs
 
+    def analyzeOp(self, addr):
+        return self.r2core.op_anal(addr)
+
     def getAsmOp(self, addr):
         if addr in self.opcodeAddrs:
             return self.r2core.disassemble(addr)
