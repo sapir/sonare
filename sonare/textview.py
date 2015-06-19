@@ -2,7 +2,7 @@ from __future__ import print_function
 import sys
 import os
 from collections import deque
-from binascii import unhexlify
+from binascii import hexlify, unhexlify
 from xml.sax.saxutils import escape as xmlEscape
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -28,13 +28,17 @@ class TextLineItem(QGraphicsItemGroup):
     COLUMN_SPACING = 15
 
 
-    def __init__(self, mainWin, addr, asmOp, font):
+    def __init__(self, mainWin, addr, size, asmOp, font):
         QGraphicsItemGroup.__init__(self)
         self.mainWin = mainWin
 
         self.addr = addr
+        self.size = size
         self.asmOp = asmOp
         self.font = font
+
+        self.hexBytes = bytearray(
+            self.mainWin.getBytes(self.addr, self.size))
 
         self.items = [
             self._makeTextItem(self.htmlAddr),
@@ -68,14 +72,7 @@ class TextLineItem(QGraphicsItemGroup):
     def htmlHex(self):
         '''Add spaces between hex chars, format nicely as HTML'''
 
-        if self.asmOp is None:
-            return ''
-
-        hexstring = self.asmOp.get_hex()
-        assert len(hexstring) % 2 == 0
-        hexWithSpaces = ' '.join(
-            hexstring[i:i+2]
-            for i in xrange(0, len(hexstring), 2))
+        hexWithSpaces = ' '.join(format(b, '02x') for b in self.hexBytes)
         return '<span class="hex">{}</span>'.format(
             xmlEscape(hexWithSpaces))
 
@@ -85,8 +82,7 @@ class TextLineItem(QGraphicsItemGroup):
         if self.asmOp is None:
             return ''
 
-        return self.mainWin.asmFormatter.format(
-            unhexlify(self.asmOp.get_hex()), self.addr)
+        return self.mainWin.asmFormatter.format(str(self.hexBytes), self.addr)
 
     @staticmethod
     def _getColWidth(colIdx, textLines):
@@ -128,7 +124,8 @@ class SonareTextScene(QGraphicsScene):
         self.textLines = deque()
 
         addr = mainWin.getAddr('main')
-        item = self._makeLine(0, addr, None)
+        size = mainWin.core.nextAddr(addr) - addr
+        item = self._makeLine(0, addr, size)
         self.addItem(item)
         self.textLines.append(item)
 
@@ -140,8 +137,9 @@ class SonareTextScene(QGraphicsScene):
     def curBottom(self):
         return self.textLines[-1].y() + self.lineSpacing
 
-    def _makeLine(self, y, addr, asmOp):
-        item = TextLineItem(self.mainWin, addr, asmOp, self.font)
+    def _makeLine(self, y, addr, size):
+        asmOp = self.mainWin.core.getAsmOp(addr)
+        item = TextLineItem(self.mainWin, addr, size, asmOp, self.font)
         item.setPos(0, y)
         return item
 
@@ -152,8 +150,10 @@ class SonareTextScene(QGraphicsScene):
 
         while self.curTop >= top:
             # add lines upwards
-            item = self._makeLine(self.curTop - self.lineSpacing,
-                self.mainWin.core.prevAddr(self.textLines[0].addr), None)
+            oldTopAddr = self.textLines[0].addr
+            addr = self.mainWin.core.prevAddr(oldTopAddr)
+            size = oldTopAddr - addr
+            item = self._makeLine(self.curTop - self.lineSpacing, addr, size)
             self.addItem(item)
             self.textLines.appendleft(item)
 
@@ -161,8 +161,9 @@ class SonareTextScene(QGraphicsScene):
 
         while self.curBottom <= bottom:
             # add lines downwards
-            item = self._makeLine(self.curBottom,
-                self.mainWin.core.nextAddr(self.textLines[-1].addr), None)
+            addr = self.textLines[-1].addr + self.textLines[-1].size
+            size = self.mainWin.core.nextAddr(addr) - addr
+            item = self._makeLine(self.curBottom, addr, size)
             self.addItem(item)
             self.textLines.append(item)
 
