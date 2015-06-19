@@ -392,7 +392,7 @@ if __name__ == '__main__':
     window = SonareWindow(path)
 
     try:
-        window.gotoFunc('main')
+        window.gotoFunc('entry0')
     except ValueError:
         pass
 
