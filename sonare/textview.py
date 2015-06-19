@@ -186,6 +186,8 @@ class SonareTextScene(QGraphicsScene):
 
 
 class SonareTextView(QGraphicsView):
+    linesUpdated = pyqtSignal([int, int])
+
     def __init__(self, mainWin):
         self.scene = SonareTextScene(mainWin)
         QGraphicsView.__init__(self, self.scene)
@@ -196,9 +198,17 @@ class SonareTextView(QGraphicsView):
             | QPainter.SmoothPixmapTransform
             | QPainter.HighQualityAntialiasing)
 
+        self.linesUpdated.connect(self.scene.setLines)
+
+    def resizeEvent(self, evt):
+        QGraphicsView.resizeEvent(self, evt)
+        self._emitLinesSignal()
+
     def scrollContentsBy(self, dx, dy):
         QGraphicsView.scrollContentsBy(self, dx, dy)
+        self._emitLinesSignal()
 
+    def _emitLinesSignal(self):
         sceneViewPoly = self.mapToScene(self.viewport().rect())
         r = sceneViewPoly.boundingRect()
-        self.scene.setLines(r.top(), r.bottom())
+        self.linesUpdated.emit(r.top(), r.bottom())
