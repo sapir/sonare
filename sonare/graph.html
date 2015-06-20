@@ -54,11 +54,17 @@ g.edge.fail    .edgeArrow { fill: #ff0000; }
             style="display: table; position: absolute; z-index: -1;">
         <div class="label">${b.labelName}:</div>
         <table>
-            % for (addr, asmOp) in b.asmOps:
+            % for (addr, hex, asmOp) in b.asmOps:
             <tr>
             <td class="addr">${addr | n,fmtAddr}</td>
-            <td class="hex">${asmOp.get_hex() | n,fmtHex}</td>
-            <td class="asm">${fmtAsm(addr, asmOp)}</td>
+            <td class="hex">${hex | n,fmtHex}</td>
+            <td class="asm">
+                % if asmOp:
+                    ${fmtAsm(addr, asmOp)}
+                % else:
+                    ?
+                % endif
+            </td>
             </tr>
             % endfor
         </table>

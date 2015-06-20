@@ -62,9 +62,8 @@ class MyBlock(object):
         for op in self.ops:
             addr = op['addr']
             asmOp = self.core.getAsmOp(addr)
-            assert asmOp is not None, \
-                "Couldn't disassemble @ {:#x}".format(addr)
-            yield (addr, asmOp)
+            hexBytes = self.core.analyzeOp(addr)['bytes']
+            yield (addr, hexBytes, asmOp)
 
     @property
     def labelName(self):
