@@ -51,5 +51,6 @@ install first:
   ```
   sudo apt-get install python-networkx python-pyqt5 \
       python-pyqt5.qtwebkit python-mako
+
   sudo pip install sortedcontainers
   ```
