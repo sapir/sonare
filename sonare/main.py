@@ -148,7 +148,12 @@ class Core(object):
         return addrs
 
     def analyzeOp(self, addr):
-        return self.r2core.op_anal(addr)
+        ops = self.cmdJson('aoj @{}', addr)
+        if not ops:
+            return None
+
+        op, = ops
+        return op
 
     def getAsmOp(self, addr):
         if addr in self.opcodeAddrs:

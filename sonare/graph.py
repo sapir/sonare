@@ -17,17 +17,6 @@ import main
 
 
 BAD_ADDR = 0xffffffffffffffff
-R_ANAL_OP_TYPE_COND  = 0x80000000
-R_ANAL_OP_TYPE_JMP   = 1        # mandatory jump
-R_ANAL_OP_TYPE_UJMP  = 2        # unknown jump (register or so)
-R_ANAL_OP_TYPE_CJMP  = R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_JMP     # conditional jump
-R_ANAL_OP_TYPE_UCJMP = R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_UJMP        # conditional unknown jump
-R_ANAL_OP_TYPE_CALL  = 3        # call to subroutine (branch+link)
-R_ANAL_OP_TYPE_UCALL = 4        # unknown call (register or so)
-R_ANAL_OP_TYPE_CCALL = R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_CALL        # conditional call to subroutine
-R_ANAL_OP_TYPE_UCCALL= R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_UCALL       # conditional unknown call
-R_ANAL_OP_TYPE_RET   = 5        # returns from subroutine
-R_ANAL_OP_TYPE_CRET  = R_ANAL_OP_TYPE_COND | R_ANAL_OP_TYPE_RET     # conditional return from subroutine
 
 
 class MLStripper(HTMLParser):
@@ -58,27 +47,20 @@ class MyBlock(object):
 
     @property
     def addr(self):
-        return self.ops[0].addr
-
-    @staticmethod
-    def normalizeAddr(addr):
-        if addr in (0, BAD_ADDR):
-            return None
-        else:
-            return addr
+        return self.ops[0]['addr']
 
     @property
     def jump(self):
-        return MyBlock.normalizeAddr(self.endOp.jump)
+        return self.endOp.get('jump')
 
     @property
     def fail(self):
-        return MyBlock.normalizeAddr(self.endOp.fail)
+        return self.endOp.get('fail')
 
     @property
     def asmOps(self):
         for op in self.ops:
-            addr = op.addr
+            addr = op['addr']
             asmOp = self.core.getAsmOp(addr)
             assert asmOp is not None, \
                 "Couldn't disassemble @ {:#x}".format(addr)
@@ -90,8 +72,9 @@ class MyBlock(object):
 
     @staticmethod
     def isEndBlockOp(op):
-        return ((op.type & 0xffffffff) & ~R_ANAL_OP_TYPE_COND) in [
-            R_ANAL_OP_TYPE_JMP, R_ANAL_OP_TYPE_UJMP, R_ANAL_OP_TYPE_RET]
+        return ('jmp' in op['type']
+            or 'call' in op['type']
+            or 'ret' in op['type'])
 
     @staticmethod
     def _makeMyBlockAt(core, addr):
@@ -106,9 +89,9 @@ class MyBlock(object):
             if MyBlock.isEndBlockOp(op):
                 endOp = op
                 # +1 including this one
-                opsLeft = op.delay + 1
+                opsLeft = op['delay'] + 1
 
-            addr += op.size
+            addr += op['size']
             if opsLeft > 0:
                 opsLeft -= 1
 
