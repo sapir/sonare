@@ -109,7 +109,7 @@ class TextLineItem(QGraphicsItemGroup):
 
 class SonareTextScene(QGraphicsScene):
     HORIZ_MARGIN = VERT_MARGIN = 40
-    REMEMBERED_LINES = 10
+    EXTRA_LINES = 10
 
 
     def __init__(self, mainWin):
@@ -156,9 +156,11 @@ class SonareTextScene(QGraphicsScene):
     def setLines(self, top, bottom):
         linesChanged = False
 
+        extraY = self.EXTRA_LINES * self.lineSpacing
+
         # add any required lines:
 
-        while self.curTop >= top:
+        while self.curTop >= top - extraY:
             # add lines upwards
             oldTopAddr = self.textLines[0].addr
             addr = self.mainWin.core.prevAddr(oldTopAddr)
@@ -169,7 +171,7 @@ class SonareTextScene(QGraphicsScene):
 
             linesChanged = True
 
-        while self.curBottom <= bottom:
+        while self.curBottom <= bottom + extraY:
             # add lines downwards
             addr = self.textLines[-1].addr + self.textLines[-1].size
             size = self.mainWin.core.nextAddr(addr) - addr
@@ -182,12 +184,11 @@ class SonareTextScene(QGraphicsScene):
 
         # remove extraneous lines:
 
-        rememberedY = self.REMEMBERED_LINES * self.lineSpacing
-        while self.curTop < top - rememberedY:
+        while self.curTop < top - extraY:
             self.removeItem(self.textLines.popleft())
             linesChanged = True
 
-        while self.curBottom > bottom + rememberedY:
+        while self.curBottom > bottom + extraY:
             self.removeItem(self.textLines.pop())
             linesChanged = True
 
