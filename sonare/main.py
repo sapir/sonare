@@ -211,6 +211,8 @@ class SonareWindow(QMainWindow):
         palette.setColor(QPalette.Text, self.DEFAULT_TEXT_COLOR)
         self.setPalette(palette)
 
+        self._makeMenus()
+
         self.open(path)
 
         self._makeScene()
@@ -219,12 +221,6 @@ class SonareWindow(QMainWindow):
         self.funcName = None
 
         self._updateWindowTitle()
-
-        shortcut = QShortcut(QKeySequence(u"Ctrl+G"), self)
-        shortcut.activated.connect(self.viewGoto)
-
-        shortcut = QShortcut(QKeySequence(u"Ctrl+R"), self)
-        shortcut.activated.connect(self.viewGraph)
 
     def viewGoto(self):
         addr = self.inputAddr('Sonare - Goto', 'Enter an address:')
@@ -242,6 +238,28 @@ class SonareWindow(QMainWindow):
             self.curView = self.textView
 
         self.setCentralWidget(self.curView)
+
+    def _makeMenus(self):
+        fileMenu = self.menuBar().addMenu(u"&File")
+
+        quitAct = QAction(u"&Quit", self)
+        quitAct.setShortcuts(QKeySequence.Quit)
+        quitAct.triggered.connect(self.close)
+        fileMenu.addAction(quitAct)
+
+
+        viewMenu = self.menuBar().addMenu("&View")
+
+        gotoAct = QAction(u"&Goto", self)
+        gotoAct.setShortcuts(QKeySequence(u"Ctrl+G"))
+        gotoAct.triggered.connect(self.viewGoto)
+        viewMenu.addAction(gotoAct)
+
+        # TODO: should probably be with a check mark
+        textGraphAct = QAction(u"Switch text/g&raph view", self)
+        textGraphAct.setShortcuts(QKeySequence(u"Ctrl+R"))
+        textGraphAct.triggered.connect(self.viewGraph)
+        viewMenu.addAction(textGraphAct)
 
     def _makeScene(self):
         self.textView = textview.SonareTextView(self)
