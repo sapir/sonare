@@ -74,7 +74,8 @@ class MyBlock(object):
     def isEndBlockOp(op):
         return ('jmp' in op['type']
             or 'call' in op['type']
-            or 'ret' in op['type'])
+            or 'ret' in op['type']
+            or 'trap' in op['type'])
 
     @staticmethod
     def _makeMyBlockAt(core, addr):
