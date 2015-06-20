@@ -84,6 +84,10 @@ class MyBlock(object):
         opsLeft = -1
         while opsLeft != 0:
             op = core.analyzeOp(addr)
+            if not op:
+                # error
+                return None
+
             ops.append(op)
 
             if MyBlock.isEndBlockOp(op):
@@ -110,6 +114,9 @@ class MyBlock(object):
             visited.add(cur)
 
             mb = MyBlock._makeMyBlockAt(core, cur)
+            if mb is None:
+                break
+
             yield mb
 
             if mb.jump:
@@ -688,6 +695,11 @@ class SonareGraphScene(QGraphicsScene):
             fixedLayout[blockAddr] = (x, y)
 
         # now adjust so minimum (x,y) is at (0, 0)
+
+        # (can't use min() with empty iterators)
+        if not fixedLayout:
+            return {}
+
         minX = min(x for (x, _) in fixedLayout.itervalues())
         minY = min(y for (_, y) in fixedLayout.itervalues())
         fixedLayout2 = dict(
@@ -742,7 +754,9 @@ class SonareGraphScene(QGraphicsScene):
                 (self.getBlockRect(blockAddr) for blockAddr in self.blockAddrs),
                 (self._pathBoundingRect(path)
                     for path in edgePaths.itervalues())
-                ))
+                ),
+            # default to an empty rect
+            QRect())
 
         r.adjust(
             -self.HORIZ_MARGIN, -self.VERT_MARGIN,
