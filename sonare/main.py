@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import *
 import r2pipe
 from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
-from sortedcontainers import SortedList
+from sortedcontainers import SortedList, SortedListWithKey
 import graph
 import textview
 
@@ -33,8 +33,12 @@ class FlagListModel(QStandardItemModel):
 
         self.setHorizontalHeaderLabels(['Address', 'Name'])
 
-        for flag in self.core.getFlags('symbols'):
+        for flag in self.core.symbolFlags:
             addr = flag['offset']
+            # TODO: no parsing
+            if not addr or not int(flag['size']):
+                continue
+
             name = flag['name']
 
             addrItem = QStandardItem(self.mainWin.fmtNum(addr))
@@ -113,6 +117,8 @@ class Core(object):
 
         self.analyze()
         self.opcodeAddrs = self._getOpcodeAddrs()
+        self.symbolFlags = SortedListWithKey(self.getFlags('symbols'),
+            key=lambda f: f['offset'])
 
     def analyze(self):
         self.cmd('aaa')
@@ -180,28 +186,20 @@ class Core(object):
         return info['name'], info['offset']
 
     def getFlagOfs(self, addr):
-        reply = self.cmd('fd {}', addr).rstrip()
-        if not reply:
-            return None, None
+        # TODO: use 'fd' command, filter out bad results somehow
+        idx = self.symbolFlags.bisect_left({'offset': addr})
+        for i in xrange(max(idx - 1, 0), len(self.symbolFlags)):
+            flag = self.symbolFlags[idx]
+            flagAddr = flag['offset']
+            if flagAddr > addr:
+                break
 
-        m = re.match(r'^(.+) \+ (-?\d+)$', reply)
-        if m:
-            flag, ofsStr = m.groups()
-            ofs = int(ofsStr)
-        else:
-            flag = reply
-            ofs = 0
+            # TOOD: size shouldn't need parsing
+            flagEnd = flagAddr + int(flag['size'])
+            if flagAddr <= addr < flagEnd:
+                return flag['name'], addr - flagAddr
 
-        # filter weird results
-        # TODO: better way of doing this
-        if ofs < 0:
-            return None, None
-
-        flagAddr = self.getAddr(flag)
-        if not flagAddr:
-            return None, None
-
-        return flag, ofs
+        return None, None
 
     def getFlags(self, space):
         # push flagspace
