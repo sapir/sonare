@@ -181,12 +181,14 @@ class Core(object):
 
     def getFlagOfs(self, addr):
         reply = self.cmd('fd {}', addr).rstrip()
+        if not reply:
+            return None, None
+
         m = re.match(r'^(.+) \+ (-?\d+)$', reply)
         if m:
             flag, ofsStr = m.groups()
             ofs = int(ofsStr)
         else:
-            assert reply
             flag = reply
             ofs = 0
 
