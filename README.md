@@ -32,7 +32,25 @@ install first:
 
 * [radare2](https://github.com/radare/radare2)
 
-* [radare2-bindings](https://github.com/radare/radare2-bindings)
+  ```
+  git clone https://github.com/radare/radare2
+  cd radare2
+  # then, to install system-wide:
+  sys/install.sh
+  # or, to install in user's home directory instead:
+  sys/user.sh
+  # (for more details, see README.md)
+  ```
+
+* [radare2-bindings](https://github.com/radare/radare2-bindings), specifically
+  the r2pipe binding.
+
+  ```
+  git clone https://github.com/radare/radare2-bindings
+  cd radare2-bindings/r2pipe/python
+  python setup.py build
+  sudo python setup.py install
+  ```
 
 * [capstone](https://github.com/aquynh/capstone)'s python bindings
 
@@ -50,7 +68,5 @@ install first:
 
   ```
   sudo apt-get install python-networkx python-pyqt5 \
-      python-pyqt5.qtwebkit python-mako
-
-  sudo pip install sortedcontainers
+      python-pyqt5.qtwebkit python-mako python-sortedcontainers
   ```
