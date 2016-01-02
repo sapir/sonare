@@ -304,7 +304,6 @@ class SonareWindow(QMainWindow):
         self._makeMenus()
 
         self.core = Core()
-        self.core.cmd('fs symbols')
 
         self.open(path)
 
