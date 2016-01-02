@@ -38,7 +38,7 @@ class TextLineItem(QGraphicsItemGroup):
         self.font = font
 
         self.hexBytes = bytearray(
-            self.mainWin.getBytes(self.addr, self.size))
+            self.mainWin.core.getBytes(self.addr, self.size))
 
         self.items = [
             self._makeTextItem(self.htmlAddr),

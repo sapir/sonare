@@ -63,7 +63,7 @@ class MipsAsmFormatter:
             mem = op.mem
 
             if mem.base == MIPS_REG_GP:
-                got = self.mainWin.getAddr('section..got')
+                got = self.mainWin.core.getAddr('section..got')
                 if got:
                     # based on
                     # https://www.cr0.org/paper/mips.elf.external.resolution.txt
@@ -72,7 +72,7 @@ class MipsAsmFormatter:
                     addr = got + OFFSET_GP_GOT + mem.disp
                     # TODO: this assumes that it's a lw insn
                     # TODO 2: in this case, we should convert insn to li/la
-                    val = self.mainWin.getWord(addr)
+                    val = self.mainWin.core.getWord(addr)
                     return _makeSpan("op", "&") + self._formatOpNum(val)
 
             output = StringIO()

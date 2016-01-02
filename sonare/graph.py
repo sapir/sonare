@@ -667,7 +667,7 @@ class SonareGraphScene(QGraphicsScene):
 
     def _formatAsm(self, addr, op):
         '''Format op's assembly nicely as HTML'''
-        return self.mainWin.asmFormatter.format(unhexlify(op.get_hex()), addr)
+        return self.mainWin.asmFormatter.format(unhexlify(op['bytes']), addr)
 
     def _setGraphNodeSizes(self, scalingFactor):
         for addr, elem in self.blockElements.iteritems():

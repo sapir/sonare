@@ -2,12 +2,13 @@ from __future__ import print_function
 import sys
 import os
 import json
+import re
 from binascii import unhexlify
 from struct import pack, unpack
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from r2.r_core import RCore
+import r2pipe
 from x86asm import X86AsmFormatter
 from mipsasm import MipsAsmFormatter
 from sortedcontainers import SortedList
@@ -23,7 +24,7 @@ class FlagListModel(QStandardItemModel):
         QStandardItemModel.__init__(self)
 
         self.mainWin = mainWin
-        self.r2core = mainWin.r2core
+        self.core = mainWin.core
 
         self._update()
 
@@ -32,14 +33,9 @@ class FlagListModel(QStandardItemModel):
 
         self.setHorizontalHeaderLabels(['Address', 'Name'])
 
-        flags = self.r2core.flags
-        oldFlagSpace = flags.space_get_i(flags.space_idx)
-        flags.space_set('symbols')
-
-        # TODO: get flags through API
-        for line in self.r2core.cmd_str('f').splitlines():
-            addr, _, name = line.split(' ', 2)
-            addr = int(addr, 16)
+        for flag in self.core.getFlags('symbols'):
+            addr = flag['offset']
+            name = flag['name']
 
             addrItem = QStandardItem(self.mainWin.fmtNum(addr))
             addrItem.setData(addr)
@@ -52,8 +48,6 @@ class FlagListModel(QStandardItemModel):
             nameItem.setFont(self.mainWin.font)
 
             self.appendRow([addrItem, nameItem])
-
-        flags.space_set(oldFlagSpace)
 
 
 class FilteredTreeDock(QDockWidget):
@@ -101,15 +95,36 @@ class FilteredTreeDock(QDockWidget):
 
 
 class Core(object):
-    def __init__(self, r2core):
-        self.r2core = r2core
+    def __init__(self):
+        # open empty, we'll open files later
+        self.r2 = r2pipe.open('--')
+        self.opcodeAddrs = []
+
+    def open(self, path):
+        # not using 'oc' command because it resets r2's -q flag, don't know what
+        # else.
+
+        # close all
+        self.cmd('o--')
+
+        # then open the new file
+        # TODO: escaping?
+        self.cmd('o {}', path)
+
+        self.analyze()
         self.opcodeAddrs = self._getOpcodeAddrs()
+
+    def analyze(self):
+        self.cmd('aaa')
+
+        # clean up function overlaps
+        self.cmd('aff')
 
     def cmd(self, s, *args):
         if args:
             s = s.format(*args)
 
-        return self.r2core.cmd_str(s)
+        return self.r2.cmd(s)
 
     def cmdJson(self, s, *args):
         if args:
@@ -117,16 +132,88 @@ class Core(object):
 
         return json.loads(self.cmd(s))
 
+    def getR2Cfg(self, name):
+        return self.cmd('e {}', name).rstrip('\n')
+
+    def setR2Cfg(self, name, val):
+        return self.cmd('e {}={}', name, val)
+
     def seek(self, ofs):
         self.cmd('s {}', ofs)
 
     def tell(self):
         return int(self.cmd('s'), 0)
 
+    def getAddr(self, addrName):
+        # TODO: return None if unknown
+        try:
+            return int(addrName, 16)
+        except ValueError:
+            pass
+
+        return int(self.cmd('?vi {}', addrName))
+
+    @property
+    def isBigEndian(self):
+        return self.getR2Cfg('cfg.bigendian') == 'true'
+
+    def getBytes(self, addr, size):
+        hexStr = self.cmd('p8 {}@{:#x}', size, addr).strip()
+        return unhexlify(hexStr)
+
+    def getWord(self, addr):
+        # TODO: use r2 api. ?vi [addr] ?
+        buf = self.getBytes(addr, 4)
+        fmt = '>L' if self.isBigEndian else '<L'
+        return unpack(fmt, buf)[0]
+
+    # def getFuncAddr(self, addr):
+    #     return int(self.cmd('afo ' + addr), 16)
+
+    def getFuncInfo(self, addr):
+        # TODO: get just name and address somehow (see also getFuncAddr)
+        infos = self.cmdJson('afij {}', addr)
+        if not infos:
+            return None, None
+
+        info, = infos
+        return info['name'], info['offset']
+
+    def getFlagOfs(self, addr):
+        reply = self.cmd('fd {}', addr).rstrip()
+        m = re.match(r'^(.+) \+ (-?\d+)$', reply)
+        if m:
+            flag, ofsStr = m.groups()
+            ofs = int(ofsStr)
+        else:
+            assert reply
+            flag = reply
+            ofs = 0
+
+        # filter weird results
+        # TODO: better way of doing this
+        if ofs < 0:
+            return None, None
+
+        flagAddr = self.getAddr(flag)
+        if not flagAddr:
+            return None, None
+
+        return flag, ofs
+
+    def getFlags(self, space):
+        # push flagspace
+        self.cmd('fs+{}', space)
+        flags = self.cmdJson('fj')
+        # pop
+        self.cmd('fs-')
+        return flags
+
     def getFunctions(self):
         return self.cmdJson('aflj')
 
     def _getOpcodeAddrs(self):
+        # TODO: lazy load?
         addrs = SortedList()
 
         funcs = self.getFunctions()
@@ -157,7 +244,8 @@ class Core(object):
 
     def getAsmOp(self, addr):
         if addr in self.opcodeAddrs:
-            return self.r2core.disassemble(addr)
+            # TODO: many at once
+            return self.cmdJson('pij 1 @{}'.format(addr))[0]
         else:
             return None
 
@@ -213,6 +301,9 @@ class SonareWindow(QMainWindow):
 
         self._makeMenus()
 
+        self.core = Core()
+        self.core.cmd('fs symbols')
+
         self.open(path)
 
         self._makeScene()
@@ -221,6 +312,11 @@ class SonareWindow(QMainWindow):
         self.funcName = None
 
         self._updateWindowTitle()
+
+    def close(self):
+        # TODO: is this the right place to put this?
+        self.r2.quit()
+        QMainWindow.close(self)
 
     def viewGoto(self):
         addr = self.inputAddr('Sonare - Goto', 'Enter an address:')
@@ -299,23 +395,11 @@ class SonareWindow(QMainWindow):
             .format(self.funcName or '?', os.path.basename(self.filePath)))
 
     def open(self, path):
-        self.r2core = RCore()
-        self.r2core.flags.space_set(b'symbols')
-
-        self.r2core.file_open(path.encode('ascii'), False, 0)
-        self.r2core.bin_load("", 0)
-
-        self.r2core.anal_all()
-        print() # anal_all is noisy
-
-        # clean up function overlaps
-        self.r2core.cmd_str('aff')
-
-        self.core = Core(self.r2core)
+        self.core.open(path)
 
         self.filePath = path
 
-        arch = self.r2core.config.get('asm.arch')
+        arch = self.core.getR2Cfg('asm.arch')
         if arch == 'x86':
             self.asmFormatter = X86AsmFormatter(self)
         elif arch == 'mips':
@@ -329,38 +413,26 @@ class SonareWindow(QMainWindow):
             return None
 
         try:
-            return self.getAddr(s)
+            return self.core.getAddr(s)
         except ValueError:
             # TODO: message box
             return None
 
-    def getAddr(self, addrName):
-        try:
-            return int(addrName, 16)
-        except ValueError:
-            pass
-
-        if isinstance(addrName, unicode):
-            addrName = addrName.encode('ascii')
-
-        return self.r2core.num.get(addrName)
-
     def gotoFunc(self, funcName):
-        funcAddr = self.getAddr(funcName)
+        funcAddr = self.core.getAddr(funcName)
         if funcAddr is None:
             raise ValueError("Unknown func '{}'".format(funcName))
 
         self.gotoAddr(funcAddr)
 
-    def gotoAddr(self, funcAddr):
-        func = self.r2core.anal.get_fcn_at(funcAddr, 1) # R_ANAL_FCN_TYPE_FCN
-        if func is None:
+    def gotoAddr(self, addr):
+        funcName, funcAddr = self.core.getFuncInfo(addr)
+        if funcAddr is None:
             self.funcName = '?'
         else:
-            self.funcName = func.name
-            funcAddr = func.addr
+            self.funcName = funcName
 
-        self.textView.gotoAddr(funcAddr)
+        self.textView.gotoAddr(addr)
 
         self.graphScene.loadFunc(funcAddr)
 
@@ -372,25 +444,14 @@ class SonareWindow(QMainWindow):
         self._updateWindowTitle()
 
     def getAddrName(self, addr):
-        flag = self.r2core.flags.get_i(int(addr) & 0xffffffffffffffff)
-        if flag is None:
-            return None
-        else:
-            return flag.name
+        flag, ofs = self.core.getFlagOfs(addr)
+        if flag is not None:
+            if ofs:
+                return '{}+{:#x}'.format(flag, ofs)
+            else:
+                return flag
 
-    @property
-    def isBigEndian(self):
-        return self.r2core.config.get('cfg.bigendian') == 'true'
-
-    def getBytes(self, addr, size):
-        hexStr = self.r2core.cmd_str('p8 {}@{:#x}'.format(size, addr)).strip()
-        return unhexlify(hexStr)
-
-    def getWord(self, addr):
-        # TODO: use r2 api
-        buf = self.getBytes(addr, 4)
-        fmt = '>L' if self.isBigEndian else '<L'
-        return unpack(fmt, buf)[0]
+        return None
 
     def fmtNum(self, val):
         if abs(val) < 10:
