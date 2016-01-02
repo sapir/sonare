@@ -16,11 +16,7 @@ First install the dependencies described below under Dependencies.
 
 To run Sonare to view the `path/to/my/binary` file:
 
-    cd /path/to/sonare/
     python sonare/main.py path/to/my/binary
-
-(Note that Sonare currently expects to be run from the root of its source
-tree.)
 
 
 # Dependencies
