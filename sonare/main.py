@@ -189,7 +189,7 @@ class Core(object):
         # TODO: use 'fd' command, filter out bad results somehow
         idx = self.symbolFlags.bisect_left({'offset': addr})
         for i in xrange(max(idx - 1, 0), len(self.symbolFlags)):
-            flag = self.symbolFlags[idx]
+            flag = self.symbolFlags[i]
             flagAddr = flag['offset']
             if flagAddr > addr:
                 break
