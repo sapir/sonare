@@ -38,12 +38,11 @@ install first:
   # (for more details, see README.md)
   ```
 
-* [radare2-bindings](https://github.com/radare/radare2-bindings), specifically
-  the r2pipe binding.
+* [radare2-r2pipe](https://github.com/radare/radare2-r2pipe)
 
   ```
-  git clone https://github.com/radare/radare2-bindings
-  cd radare2-bindings/r2pipe/python
+  git clone https://github.com/radare/radare2-r2pipe
+  cd radare2-r2pipe/python
   python setup.py build
   sudo python setup.py install
   ```
@@ -63,6 +62,8 @@ install first:
 * Various python modules: networkx, PyQt5, mako, sortedcontainers
 
   ```
-  sudo apt-get install python-networkx python-pyqt5 \
-      python-pyqt5.qtwebkit python-mako python-sortedcontainers
+  sudo apt install python-networkx python-pyqt5 \
+      python-pyqt5.qtwebkit python-mako python-sortedcontainers \
+      graphviz libgraphviz-dev
+  sudo -H pip install pygraphviz
   ```
