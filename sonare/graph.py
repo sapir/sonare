@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 import os
 import networkx
+from networkx.drawing.nx_agraph import graphviz_layout
 import itertools
 from binascii import unhexlify
 from heapq import heappush, heappop
@@ -713,7 +714,7 @@ class SonareGraphScene(QGraphicsScene):
         self._setGraphNodeSizes(1. / self.GRAPHVIZ_SCALE_FACTOR)
 
         # dot is for directed graphs
-        layout = networkx.graphviz_layout(self.blockGraph, prog='dot')
+        layout = graphviz_layout(self.blockGraph, prog='dot')
 
         layout = self._fixGraphvizLayout(layout)
 
